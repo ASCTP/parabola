@@ -37,7 +37,7 @@ Parabola is a client-side SDK: it never holds funds or private keys, but it does
 
 **Do not open a public GitHub issue for a security vulnerability.**
 
-Use [GitHub's private vulnerability reporting](https://github.com/drydocs/parabola/security/advisories/new) for this repository. Include:
+Use [GitHub's private vulnerability reporting](https://github.com/ASCTP/parabola/security/advisories/new) for this repository. Include:
 
 - A description of the vulnerability and where it lives (file/function)
 - Steps to reproduce, ideally as a failing test case
@@ -45,7 +45,7 @@ Use [GitHub's private vulnerability reporting](https://github.com/drydocs/parabo
 - Whether the finding applies to Arc, Stellar, or both
 - A suggested fix, if you have one (optional)
 
-If you don't receive an acknowledgement within 72 hours, open a [GitHub Discussion](https://github.com/drydocs/parabola/discussions) (Q&A category, marked private) as a follow-up.
+If you don't receive an acknowledgement within 72 hours, open a [GitHub Discussion](https://github.com/ASCTP/parabola/discussions) (Q&A category, marked private) as a follow-up.
 
 ---
 

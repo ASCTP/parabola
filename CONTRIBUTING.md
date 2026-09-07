@@ -61,7 +61,7 @@ If you are unsure whether a contribution fits, open a GitHub Discussion before w
 
 If this is your first open-source contribution, start here:
 
-1. Filter issues by [`good first issue`](https://github.com/drydocs/parabola/issues?q=is%3Aopen+label%3A%22good+first+issue%22): these are fully isolated tasks that don't require deep knowledge of CCTP, Arc, or Soroban.
+1. Filter issues by [`good first issue`](https://github.com/ASCTP/parabola/issues?q=is%3Aopen+label%3A%22good+first+issue%22): these are fully isolated tasks that don't require deep knowledge of CCTP, Arc, or Soroban.
 2. Comment on the issue to signal you are picking it up before starting.
 3. Follow the [Getting Started](#getting-started) guide below to set up the project.
 4. When your PR is ready, follow the [Pull Request Process](#pull-request-process) section exactly.
@@ -93,7 +93,7 @@ You do not need funded Arc or Stellar testnet accounts to work on the SDK itself
 2. Add the upstream remote so you can keep your fork in sync:
 
    ```bash
-   git remote add upstream https://github.com/drydocs/parabola.git
+   git remote add upstream https://github.com/ASCTP/parabola.git
    ```
 
 3. Before starting any work, sync your fork with upstream:
@@ -347,7 +347,7 @@ Publishing authenticates via npm's Trusted Publishing (OIDC): npm trusts this ex
 ## Getting Help
 
 - **Questions about an issue?** Comment on the issue directly.
-- **Dev setup broken?** Open a [GitHub Discussion](https://github.com/drydocs/parabola/discussions).
+- **Dev setup broken?** Open a [GitHub Discussion](https://github.com/ASCTP/parabola/discussions).
 - **Found a bug not covered by an existing issue?** Open a new issue using the Bug Report template before starting any work.
 - **Have a feature idea?** Open a Discussion first. Do not open a PR for a feature that has not been discussed and approved.
 - **Security issue?** See [SECURITY.md](SECURITY.md); do not open a public issue.

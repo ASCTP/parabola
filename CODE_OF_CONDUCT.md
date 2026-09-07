@@ -20,11 +20,11 @@ Parabola serves developers building payment, remittance, and treasury tooling on
 
 ## Scope
 
-This Code of Conduct applies within GitHub repositories under the `drydocs` organization related to Parabola (issues, pull requests, discussions, commits) and in any other space where an individual is representing the project.
+This Code of Conduct applies within GitHub repositories under the `ASCTP` organization related to Parabola (issues, pull requests, discussions, commits) and in any other space where an individual is representing the project.
 
 ## Reporting
 
-Report violations via a private message to the maintainers, or through [GitHub Discussions](https://github.com/drydocs/parabola/discussions) using the Q&A category with the "mark as private" option enabled. Reports are handled in confidence.
+Report violations via a private message to the maintainers, or through [GitHub Discussions](https://github.com/ASCTP/parabola/discussions) using the Q&A category with the "mark as private" option enabled. Reports are handled in confidence.
 
 ## Enforcement
 

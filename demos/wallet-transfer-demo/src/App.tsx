@@ -98,7 +98,7 @@ export function App() {
         <p className="subtitle">
           Connect your own wallets and trigger a real, non-custodial USDC transfer between Arc
           and Stellar testnet. See{" "}
-          <a href="https://github.com/drydocs/parabola/blob/main/INTEGRATION.md" target="_blank" rel="noreferrer">
+          <a href="https://github.com/ASCTP/parabola/blob/main/INTEGRATION.md" target="_blank" rel="noreferrer">
             INTEGRATION.md
           </a>{" "}
           for the patterns this app illustrates.

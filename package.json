@@ -8,12 +8,12 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/drydocs/parabola.git"
+    "url": "git+https://github.com/ASCTP/parabola.git"
   },
   "bugs": {
-    "url": "https://github.com/drydocs/parabola/issues"
+    "url": "https://github.com/ASCTP/parabola/issues"
   },
-  "homepage": "https://github.com/drydocs/parabola#readme",
+  "homepage": "https://github.com/ASCTP/parabola#readme",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
