@@ -1,5 +1,5 @@
-import type { ChainId, TransferResult } from "@drydocs/parabola";
-import { ARC_TESTNET } from "@drydocs/parabola";
+import type { ChainId, TransferResult } from "@asctp/parabola";
+import { ARC_TESTNET } from "@asctp/parabola";
 import { shortenTxHash, formatDurationMs } from "../lib/formatting.js";
 
 function explorerUrl(chain: ChainId, txHash: string): string {

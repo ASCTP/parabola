@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Address } from "viem";
-import type { ArcSigner } from "@drydocs/parabola";
+import type { ArcSigner } from "@asctp/parabola";
 import { connectArcWallet } from "../lib/arcWallet.js";
 
 export type WalletStatus = "idle" | "connecting" | "connected" | "error";

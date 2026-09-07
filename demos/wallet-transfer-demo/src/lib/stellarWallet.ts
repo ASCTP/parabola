@@ -1,5 +1,5 @@
 import { isConnected, requestAccess, getAddress, signTransaction as freighterSignTransaction } from "@stellar/freighter-api";
-import { STELLAR_TESTNET, type StellarSigner } from "@drydocs/parabola";
+import { STELLAR_TESTNET, type StellarSigner } from "@asctp/parabola";
 
 /**
  * Connects to the Freighter browser extension and returns a StellarSigner whose

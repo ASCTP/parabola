@@ -1,6 +1,6 @@
 {
-  "name": "@drydocs/parabola",
-  "version": "0.1.0",
+  "name": "@asctp/parabola",
+  "version": "0.2.0",
   "publishConfig": {
     "access": "public"
   },

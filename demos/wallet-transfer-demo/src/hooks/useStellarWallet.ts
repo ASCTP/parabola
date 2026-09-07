@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { StellarSigner } from "@drydocs/parabola";
+import type { StellarSigner } from "@asctp/parabola";
 import { connectStellarWallet, stellarWalletStillConnected } from "../lib/stellarWallet.js";
 import type { WalletStatus } from "./useArcWallet.js";
 

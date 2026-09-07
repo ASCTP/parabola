@@ -10,7 +10,7 @@ import {
   type EstimateFeeParams,
   type FeeEstimate,
   type CompleteMintParams,
-} from "@drydocs/parabola";
+} from "@asctp/parabola";
 
 export type TransferUiStatus = "idle" | "submitting" | "success" | "pending" | "error";
 

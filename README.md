@@ -15,7 +15,7 @@ different data models.
 ## Installation
 
 ```bash
-npm install @drydocs/parabola
+npm install @asctp/parabola
 ```
 
 ## Arc to Stellar
@@ -24,7 +24,7 @@ npm install @drydocs/parabola
 import { createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { Keypair } from "@stellar/stellar-sdk";
-import { transfer, arcTestnetChain, type ArcSigner, type StellarSigner } from "@drydocs/parabola";
+import { transfer, arcTestnetChain, type ArcSigner, type StellarSigner } from "@asctp/parabola";
 
 const arcAccount = privateKeyToAccount(process.env.ARC_PRIVATE_KEY as `0x${string}`);
 const arcSigner: ArcSigner = {
@@ -74,7 +74,7 @@ See [`examples/arc-to-stellar.ts`](examples/arc-to-stellar.ts) for the full work
 import { createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { Keypair } from "@stellar/stellar-sdk";
-import { transfer, arcTestnetChain, type ArcSigner, type StellarSigner } from "@drydocs/parabola";
+import { transfer, arcTestnetChain, type ArcSigner, type StellarSigner } from "@asctp/parabola";
 
 const stellarKeypair = Keypair.fromSecret(process.env.STELLAR_SECRET_KEY!);
 const stellarSigner: StellarSigner = {
@@ -109,7 +109,7 @@ See [`examples/stellar-to-arc.ts`](examples/stellar-to-arc.ts) for the full work
 ## Fee estimation
 
 ```typescript
-import { estimateFee } from "@drydocs/parabola";
+import { estimateFee } from "@asctp/parabola";
 
 const estimate = await estimateFee({
   from: "arc",
@@ -143,7 +143,7 @@ Along the way, Parabola also:
 If you omit `destinationSigner` (for example, your backend only holds the source chain's key at call time), `transfer()` performs the burn and attestation polling and returns `status: "pending"` with `mintTxHash: ""`. Finish the transfer later, from wherever the destination key lives, with `completeMint()`:
 
 ```typescript
-import { completeMint } from "@drydocs/parabola";
+import { completeMint } from "@asctp/parabola";
 
 const { mintTxHash, attestationHash } = await completeMint({
   from: "arc",
@@ -160,7 +160,7 @@ A Stellar account doesn't exist on-ledger until it's funded with the minimum XLM
 You can also run this check yourself ahead of time, for example to validate a recipient address in a form before a user submits a transfer:
 
 ```typescript
-import { checkStellarRecipientReady } from "@drydocs/parabola";
+import { checkStellarRecipientReady } from "@asctp/parabola";
 
 const status = await checkStellarRecipientReady("GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI");
 console.log(status);

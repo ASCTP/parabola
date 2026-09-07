@@ -338,9 +338,9 @@ Releases are maintainer-only and tag-triggered; contributors don't need to do an
 1. On `main`, bump `version` in `package.json` (semver) and move the relevant `[Unreleased]` entries in `CHANGELOG.md` under a new `## [X.Y.Z] - YYYY-MM-DD` heading.
 2. Commit that as `chore(release): vX.Y.Z`, push, and confirm CI is green.
 3. Tag it and push the tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.
-4. `.github/workflows/publish.yml` picks up the tag, re-runs typecheck/test/build, confirms the tag version matches `package.json`, and publishes `@drydocs/parabola` to npm. Provenance attestations are generated automatically as part of this.
+4. `.github/workflows/publish.yml` picks up the tag, re-runs typecheck/test/build, confirms the tag version matches `package.json`, and publishes `@asctp/parabola` to npm. Provenance attestations are generated automatically as part of this.
 
-Publishing authenticates via npm's Trusted Publishing (OIDC): npm trusts this exact repository and workflow file directly, so there's no long-lived token to provision, leak, or rotate. That trust relationship is configured once on npm's side (`@drydocs/parabola` package settings > Trusted Publisher), by whoever holds the npm org access, not something CI or a contributor can provision. If the workflow file is ever renamed, publishing breaks until the Trusted Publisher config is updated to match.
+Publishing authenticates via npm's Trusted Publishing (OIDC): npm trusts this exact repository and workflow file directly, so there's no long-lived token to provision, leak, or rotate. That trust relationship is configured once on npm's side (`@asctp/parabola` package settings > Trusted Publisher), by whoever holds the npm org access, not something CI or a contributor can provision. If the workflow file is ever renamed, publishing breaks until the Trusted Publisher config is updated to match.
 
 ---
 

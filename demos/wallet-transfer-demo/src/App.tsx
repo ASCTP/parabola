@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { TransferParams, CompleteMintParams, Signer } from "@drydocs/parabola";
+import type { TransferParams, CompleteMintParams, Signer } from "@asctp/parabola";
 import { useArcWallet } from "./hooks/useArcWallet.js";
 import { useStellarWallet } from "./hooks/useStellarWallet.js";
 import { useTransfer } from "./hooks/useTransfer.js";

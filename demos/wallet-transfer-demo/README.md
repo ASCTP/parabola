@@ -20,13 +20,13 @@ two integration patterns this app illustrates (this one, plus the backend-held-k
 
 ## Running it
 
-This app depends on `@drydocs/parabola` via a pnpm workspace link (the package isn't published
+This app depends on `@asctp/parabola` via a pnpm workspace link (the package isn't published
 yet), which means the SDK must be built once before the demo can resolve real types/JS:
 
 ```bash
 # from the repo root
 pnpm install
-pnpm build       # builds @drydocs/parabola's dist/, required before the demo will run
+pnpm build       # builds @asctp/parabola's dist/, required before the demo will run
 pnpm dev:wallet-transfer-demo     # starts this app
 ```
 

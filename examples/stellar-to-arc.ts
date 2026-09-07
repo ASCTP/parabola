@@ -9,7 +9,7 @@
 import { createWalletClient, http, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { Keypair } from "@stellar/stellar-sdk";
-import { transfer, arcTestnetChain, type ArcSigner, type StellarSigner } from "@drydocs/parabola";
+import { transfer, arcTestnetChain, type ArcSigner, type StellarSigner } from "@asctp/parabola";
 
 async function main() {
   const stellarKeypair = Keypair.fromSecret(process.env.STELLAR_SECRET_KEY!);

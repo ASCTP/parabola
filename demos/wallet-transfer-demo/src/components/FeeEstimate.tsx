@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import type { ChainId, TransferSpeed, FeeEstimate as FeeEstimateType } from "@drydocs/parabola";
+import type { ChainId, TransferSpeed, FeeEstimate as FeeEstimateType } from "@asctp/parabola";
 
 interface Props {
   from: ChainId;

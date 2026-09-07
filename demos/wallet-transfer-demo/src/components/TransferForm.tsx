@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import type { ChainId, TransferSpeed } from "@drydocs/parabola";
+import type { ChainId, TransferSpeed } from "@asctp/parabola";
 import type { useArcWallet } from "../hooks/useArcWallet.js";
 import type { useStellarWallet } from "../hooks/useStellarWallet.js";
 

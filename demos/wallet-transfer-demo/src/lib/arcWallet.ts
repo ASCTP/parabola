@@ -1,5 +1,5 @@
 import { createWalletClient, custom, type Address, type WalletClient } from "viem";
-import { arcTestnetChain, ARC_TESTNET, type ArcSigner } from "@drydocs/parabola";
+import { arcTestnetChain, ARC_TESTNET, type ArcSigner } from "@asctp/parabola";
 
 /**
  * Connects to an injected EVM wallet (e.g. MetaMask) via window.ethereum, switches it to

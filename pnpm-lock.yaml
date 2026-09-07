@@ -30,7 +30,7 @@ importers:
 
   demos/wallet-transfer-demo:
     dependencies:
-      '@drydocs/parabola':
+      '@asctp/parabola':
         specifier: workspace:*
         version: link:../..
       '@stellar/freighter-api':
