@@ -18,19 +18,37 @@ different data models.
 npm install @asctp/parabola
 ```
 
+## Choosing a network
+
+Every entry point (`transfer`, `estimateFee`, `completeMint`, `checkStellarRecipientReady`) accepts an optional `network` parameter: `"mainnet"` or `"testnet"`. It defaults to `"mainnet"`.
+
+Mainnet moves real USDC and spends real Arc gas on every transfer. A caller that does not pass `network` transacts on mainnet. Pass `network: "testnet"` to run against Arc and Stellar testnet with faucet funds (fund via [faucet.circle.com](https://faucet.circle.com)) during development.
+
+```typescript
+// Development against testnet, no real funds
+const result = await transfer({ /* ... */, network: "testnet" });
+
+// Production, moves real USDC (this is the default when network is omitted)
+const result = await transfer({ /* ... */, network: "mainnet" });
+```
+
+The network selects the contract addresses, RPC endpoints, and Circle Iris environment used internally. Both examples below pass `network: "mainnet"` explicitly; drop it and the behavior is identical.
+
+The Stellar Soroban RPC defaults to `https://mainnet.sorobanrpc.com` on mainnet and `https://soroban-testnet.stellar.org` on testnet. Override it per call with `options.stellarRpcUrl` (recommended on mainnet, where a dedicated or paid RPC is more reliable than the public default).
+
 ## Arc to Stellar
 
 ```typescript
 import { createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { Keypair } from "@stellar/stellar-sdk";
-import { transfer, arcTestnetChain, type ArcSigner, type StellarSigner } from "@asctp/parabola";
+import { transfer, arcMainnetChain, type ArcSigner, type StellarSigner } from "@asctp/parabola";
 
 const arcAccount = privateKeyToAccount(process.env.ARC_PRIVATE_KEY as `0x${string}`);
 const arcSigner: ArcSigner = {
   walletClient: createWalletClient({
     account: arcAccount,
-    chain: arcTestnetChain,
+    chain: arcMainnetChain,
     transport: http(),
   }),
 };
@@ -48,6 +66,7 @@ const result = await transfer({
   recipient: "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI",
   speed: "fast",
   signer: arcSigner,
+  network: "mainnet",
   options: {
     maxFee: "0.05",
     destinationSigner,
@@ -74,7 +93,7 @@ See [`examples/arc-to-stellar.ts`](examples/arc-to-stellar.ts) for the full work
 import { createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { Keypair } from "@stellar/stellar-sdk";
-import { transfer, arcTestnetChain, type ArcSigner, type StellarSigner } from "@asctp/parabola";
+import { transfer, arcMainnetChain, type ArcSigner, type StellarSigner } from "@asctp/parabola";
 
 const stellarKeypair = Keypair.fromSecret(process.env.STELLAR_SECRET_KEY!);
 const stellarSigner: StellarSigner = {
@@ -86,7 +105,7 @@ const arcAccount = privateKeyToAccount(process.env.ARC_PRIVATE_KEY as `0x${strin
 const destinationSigner: ArcSigner = {
   walletClient: createWalletClient({
     account: arcAccount,
-    chain: arcTestnetChain,
+    chain: arcMainnetChain,
     transport: http(),
   }),
 };
@@ -98,6 +117,7 @@ const result = await transfer({
   recipient: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
   speed: "standard",
   signer: stellarSigner,
+  network: "mainnet",
   options: { destinationSigner },
 });
 
@@ -169,22 +189,25 @@ console.log(status);
 
 ## Environment variables
 
-Parabola's contract addresses, RPC URLs, and Iris endpoints are baked in (testnet only, see Known Limitations). The examples read these from your environment:
+Parabola's contract addresses, RPC URLs, and Iris endpoints are baked in for both mainnet and testnet, selected by the `network` parameter (see [Choosing a network](#choosing-a-network)). The examples read keys from your environment:
 
 | Variable | Description |
 | --- | --- |
-| `ARC_PRIVATE_KEY` | EVM private key for an Arc testnet account, funded via [faucet.circle.com](https://faucet.circle.com) |
-| `STELLAR_SECRET_KEY` | Stellar secret key (`S...`) for a Stellar testnet account, funded via [faucet.circle.com](https://faucet.circle.com) |
+| `ARC_PRIVATE_KEY` | EVM private key for an Arc account funded with USDC and gas. On testnet, fund via [faucet.circle.com](https://faucet.circle.com) |
+| `STELLAR_SECRET_KEY` | Stellar secret key (`S...`) funded with USDC and XLM. On testnet, fund via [faucet.circle.com](https://faucet.circle.com) |
+| `STELLAR_RPC_URL` | Optional Soroban RPC override, passed through as `options.stellarRpcUrl` |
 
 Network configuration used internally:
 
-- Arc testnet RPC: `https://rpc.testnet.arc.network` (chain ID `5042002`)
-- Stellar Soroban testnet RPC: `https://soroban-testnet.stellar.org`
-- Iris sandbox API: `https://iris-api-sandbox.circle.com/v2/`
+| | Mainnet | Testnet |
+| --- | --- | --- |
+| Arc RPC | `https://rpc.mainnet.arc.io` (chain ID `5042`) | `https://rpc.testnet.arc.network` (chain ID `5042002`) |
+| Stellar Soroban RPC | `https://mainnet.sorobanrpc.com` | `https://soroban-testnet.stellar.org` |
+| Iris API | `https://iris-api.circle.com/v2/` | `https://iris-api-sandbox.circle.com/v2/` |
 
 ## Known limitations
 
-- **Testnet only.** Arc is currently in public testnet ahead of its 2026 mainnet launch, so Parabola only ships Arc testnet contract addresses. Mainnet support lands once Arc mainnet and its CCTP deployment are public.
+- **`network` defaults to mainnet.** With `network` omitted, `transfer()` moves real USDC and spends real Arc gas. Pass `network: "testnet"` for development against faucet funds. See [Choosing a network](#choosing-a-network).
 - **Stellar inbound transfers require `CctpForwarder`.** This is a protocol requirement, not a Parabola choice: Circle's CCTP does not support minting directly to a Stellar address, so every transfer landing on Stellar routes through `mint_and_forward`.
 - **No key custody.** Parabola never holds or transmits private keys. Completing a transfer's mint step on the destination chain requires a signer native to that chain (see `destinationSigner` above); Parabola cannot complete it for you without one.
 - **Stellar recipients need a USDC trustline first.** USDC on Stellar is a classic Stellar asset under the hood; any account receiving it for the first time must submit its own `changeTrust` operation before `mint_and_forward` can pay out to it, same as any other Stellar USDC transfer. Parabola cannot establish this on a recipient's behalf (it has no signing relationship with an arbitrary third-party recipient). If the recipient hasn't received USDC on Stellar before, they need to set up the trustline themselves first.
@@ -202,8 +225,8 @@ pnpm install
 pnpm build            # tsup, emits ESM + CJS + type declarations to dist/
 pnpm test             # vitest (mocked, no network access)
 pnpm typecheck        # tsc --noEmit
-pnpm verify:addresses # confirms every address in src/constants.ts is live on-chain
-pnpm smoke            # real end-to-end transfer against live testnet (needs funded keys)
+pnpm verify:addresses # confirms every address in src/constants.ts is live on-chain (both networks)
+pnpm smoke            # real end-to-end transfer against live testnet (needs funded keys); NETWORK=mainnet moves real funds
 ```
 
 See [CONTRIBUTING.md's Testing Strategy](CONTRIBUTING.md#testing-strategy) for what each of these actually catches.

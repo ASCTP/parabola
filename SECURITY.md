@@ -66,6 +66,6 @@ A hardcoded contract address or domain ID that's wrong is always at least **High
 
 We follow coordinated disclosure: report privately, allow time for a fix, and we'll credit you in the advisory and release notes unless you ask to stay anonymous. Parabola does not currently offer a paid bug bounty.
 
-## Known Limitations (Current Development Phase)
+## Networks
 
-Parabola currently targets Arc and Stellar **testnet only** (see the README's Known Limitations section). No mainnet contract addresses are shipped. Even so, encoding and precision bugs found now are the bugs that would cause real fund loss after mainnet support lands, so please report them under this policy rather than treating them as low-stakes because it's testnet.
+Parabola supports both Arc and Stellar mainnet and testnet, selected by the `network` parameter, which defaults to `"mainnet"`. Mainnet transfers move real USDC. Encoding, precision, and address-validation bugs are the class most likely to cause real fund loss, so please report them under this policy regardless of which network you found them on.

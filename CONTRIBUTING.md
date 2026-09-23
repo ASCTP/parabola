@@ -77,7 +77,7 @@ If this is your first open-source contribution, start here:
 
 If you have [Corepack](https://nodejs.org/api/corepack.html) enabled (`corepack enable`), the correct pnpm version is picked up automatically from `package.json`.
 
-You do not need funded Arc or Stellar testnet accounts to work on the SDK itself, since unit tests mock all network and RPC calls. You only need them if you're running the files in `examples/` against live testnet, which you can fund via [faucet.circle.com](https://faucet.circle.com).
+You do not need funded Arc or Stellar accounts to work on the SDK itself, since unit tests mock all network and RPC calls. You only need them if you're running the files in `examples/` or `pnpm smoke` against a live network. On testnet you can fund via [faucet.circle.com](https://faucet.circle.com); mainnet moves real funds.
 
 ---
 
@@ -138,9 +138,9 @@ parabola/
       amount.ts            # USDC amount parsing and formatting
     types.ts              # all exported TypeScript types
   tests/                 # vitest, one file per module above
-  examples/              # runnable testnet examples
+  examples/              # runnable examples (mainnet default, NETWORK=testnet override)
   demos/                 # demo apps: see demos/README.md; wallet-transfer-demo/ is the first
-  scripts/               # address verification and testnet smoke test
+  scripts/               # address verification and smoke test
 ```
 
 Changes to `src/constants.ts` affect every transfer path; see [Code Standards](#code-standards) below before touching contract addresses or domain IDs.
@@ -153,11 +153,11 @@ Parabola uses three layers of testing, each catching a different class of bug:
 
 1. **Unit tests (`tests/`, run via `pnpm test`).** Every network and RPC call is mocked with `vi.mock`. These are fast, run in CI on every push, and are the right place to cover argument-encoding bugs and every error branch; see the existing `vi.mock` patterns in `tests/arc.test.ts` and `tests/stellar.test.ts` for the convention. They cannot catch a wrong contract address, a wrong ABI, or a real-world RPC quirk, because nothing here talks to a real network.
 
-2. **Live address verification (`pnpm verify:addresses`, `scripts/verify-contract-addresses.mjs`).** Confirms every address in `src/constants.ts` has real, deployed code at that address on its claimed testnet: Arc via `eth_getCode`, Stellar via `getContractData`. No funded account needed, since these are public reads. Runs in CI automatically on any PR that touches `src/constants.ts` (`.github/workflows/verify-contract-addresses.yml`). This catches typos and stale addresses; it cannot catch "right shape of address, wrong contract."
+2. **Live address verification (`pnpm verify:addresses`, `scripts/verify-contract-addresses.mjs`).** Confirms every address in `src/constants.ts` has real, deployed code at that address on its claimed network, both mainnet and testnet: Arc via `eth_getCode`, Stellar via `getContractData`. No funded account needed, since these are public reads. Runs in CI automatically on any PR that touches `src/constants.ts` (`.github/workflows/verify-contract-addresses.yml`). This catches typos and stale addresses; it cannot catch "right shape of address, wrong contract."
 
-3. **Testnet smoke test (`pnpm smoke`, `scripts/testnet-smoke.mjs`).** Runs a real `transfer()` end-to-end in both directions against live Arc and Stellar testnet: real `depositForBurn`, real Iris attestation polling, real `receiveMessage` / `mint_and_forward`. This is the only layer that would catch a bug in the actual burn-attest-mint flow, bundling regressions in `dist/` (it imports the built package, not `src/`), or a live API contract change from Circle. It needs funded testnet keys (see `.env.example`, fund via [faucet.circle.com](https://faucet.circle.com)) and takes anywhere from 20 seconds to several minutes per case, so it is **not** run automatically in CI; run it manually before a release, or after changing anything in `src/transfer.ts`, `src/chains/`, or `src/iris/`.
+3. **Smoke test (`pnpm smoke`, `scripts/testnet-smoke.mjs`).** Runs a real `transfer()` end-to-end in both directions against a live network: real `depositForBurn`, real Iris attestation polling, real `receiveMessage` / `mint_and_forward`. It defaults to testnet; set `NETWORK=mainnet` to run against mainnet, which moves real USDC and spends real Arc gas. This is the only layer that would catch a bug in the actual burn-attest-mint flow, bundling regressions in `dist/` (it imports the built package, not `src/`), or a live API contract change from Circle. It needs funded keys (on testnet, see `.env.example` and fund via [faucet.circle.com](https://faucet.circle.com)) and takes anywhere from 20 seconds to several minutes per case, so it is **not** run automatically in CI; run it manually before a release, or after changing anything in `src/transfer.ts`, `src/chains/`, or `src/iris/`.
 
-You do not need funded Arc or Stellar testnet accounts to work on the SDK day-to-day; layers 1 and 2 cover most contributions. Layer 3 matters most for changes to the transfer/mint/burn flow itself.
+You do not need funded Arc or Stellar accounts to work on the SDK day-to-day; layers 1 and 2 cover most contributions. Layer 3 matters most for changes to the transfer/mint/burn flow itself.
 
 ---
 
@@ -271,7 +271,7 @@ docs: document completeMint in the README
 - **Comments:** only comment on WHY, not what the code does. If the code needs a what-comment, rewrite the code instead.
 - **Contract addresses and domain IDs:** never add or change a value in `src/constants.ts` from memory or inference. Pull it from Circle's or Arc's published docs (linked in the README) and cite the source page in the PR description. A wrong address here sends real funds to the wrong place. Any PR touching `src/constants.ts` runs `pnpm verify:addresses` in CI, which checks every address against live RPC (Arc `eth_getCode`, Stellar `getContractData`) to confirm something is actually deployed there. This catches typos and stale addresses, but it's not a substitute for citing the source doc, since a live contract at the wrong address still passes.
 - **Stellar contract call argument order and hook-data encoding:** don't guess these from vague doc summaries. [circlefin/stellar-cctp](https://github.com/circlefin/stellar-cctp) is Circle's official Stellar CCTP contract source and reference TypeScript client. `examples/stellar.ts` and `examples/stellar-utils.ts` there are the canonical answer for `deposit_for_burn`'s argument order and `buildCctpForwarderHookData`'s byte layout. Early versions of `src/chains/stellar.ts` and `src/utils/encoding.ts` got both wrong from inference before this repo was found; a live testnet smoke test caught it, but checking here first would have caught it before any code was written.
-- **Tests:** any change to `src/utils/encoding.ts`, `src/chains/*.ts`, or `src/transfer.ts` needs a corresponding test. Network and RPC calls are mocked in unit tests; see the existing `vi.mock` patterns in `tests/` for the convention. `pnpm verify:addresses` (`scripts/verify-contract-addresses.mjs`) is the one check that hits live testnet RPC directly; it needs no funded account since it's read-only.
+- **Tests:** any change to `src/utils/encoding.ts`, `src/chains/*.ts`, or `src/transfer.ts` needs a corresponding test. Network and RPC calls are mocked in unit tests; see the existing `vi.mock` patterns in `tests/` for the convention. `pnpm verify:addresses` (`scripts/verify-contract-addresses.mjs`) is the one check that hits live RPC directly (mainnet and testnet); it needs no funded account since it's read-only.
 
 ---
 
@@ -323,7 +323,7 @@ pnpm typecheck        # tsc --noEmit
 pnpm test             # vitest
 pnpm build            # tsup, emits ESM + CJS + type declarations to dist/
 pnpm verify:addresses # confirms src/constants.ts addresses are live on-chain (no funded account needed)
-pnpm smoke            # real end-to-end transfer against live testnet (needs funded keys, see Testing Strategy)
+pnpm smoke            # real end-to-end transfer against a live network (needs funded keys, see Testing Strategy)
 
 # Run a single test file
 pnpm vitest run tests/encoding.test.ts

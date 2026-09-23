@@ -28,8 +28,8 @@ base pattern for this approach.
 **Shape:**
 
 - `ArcSigner` just wraps a viem `WalletClient`. Build one from an injected wallet with
-  `createWalletClient({ account, chain: arcTestnetChain, transport: custom(window.ethereum) })`
-  and you have a valid `ArcSigner`. Nothing Parabola-specific about it.
+  `createWalletClient({ account, chain: arcMainnetChain, transport: custom(window.ethereum) })`
+  and you have a valid `ArcSigner` (use `arcTestnetChain` for testnet). Nothing Parabola-specific about it.
 - `StellarSigner` accepts a `signTransaction` callback instead of a raw `Keypair` for exactly
   this case. Freighter's own `signTransaction(xdr, opts)` resolves to
   `{ signedTxXdr: string; signerAddress: string; error?: FreighterApiError }` (note it's an
@@ -86,10 +86,10 @@ pnpm build      # builds @asctp/parabola: required first, see demos/wallet-trans
 pnpm dev:wallet-transfer-demo
 ```
 
-Prerequisites: MetaMask and Freighter browser extensions, and funded Arc + Stellar testnet
-accounts via [faucet.circle.com](https://faucet.circle.com). Both integration patterns above are
-reachable in the same UI: check or uncheck "Complete the mint automatically" to switch between
-them.
+Prerequisites: MetaMask and Freighter browser extensions, and funded Arc + Stellar accounts. On
+testnet, fund both via [faucet.circle.com](https://faucet.circle.com). Both integration patterns
+above are reachable in the same UI: check or uncheck "Complete the mint automatically" to switch
+between them.
 
 ## Choosing a pattern for your app
 

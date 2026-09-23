@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-23
+
+### Added
+
+- Mainnet support for both Arc and Stellar. `transfer()`, `estimateFee()`, `completeMint()`, and `checkStellarRecipientReady()` accept an optional `network` parameter (`"mainnet"` or `"testnet"`) that selects contract addresses, RPC endpoints, and the Circle Iris environment.
+- `arcMainnetChain`, `ARC_MAINNET`, `STELLAR_MAINNET`, and the `Network` type are exported from the package root alongside the existing testnet values.
+- `options.stellarRpcUrl` to override the Soroban RPC per call. Defaults to `https://mainnet.sorobanrpc.com` on mainnet and `https://soroban-testnet.stellar.org` on testnet.
+- `scripts/verify-contract-addresses.mjs` now verifies mainnet addresses in addition to testnet.
+
+### Changed
+
+- **Breaking:** `network` defaults to `"mainnet"`. A 0.2.0 caller that upgrades and does not pass `network` will transact on Arc and Stellar mainnet, moving real USDC and spending real Arc gas. Pass `network: "testnet"` to keep the previous testnet behavior.
+- **Breaking:** removed `useSandbox` from `TransferOptions` and `CompleteMintParams`. The Iris environment is now derived from `network` (`testnet` uses the Iris sandbox), so `useSandbox` is no longer needed. Callers that set it should pass `network: "testnet"` instead.
+- `pnpm smoke` still defaults to testnet for safety; set `NETWORK=mainnet` to smoke against mainnet.
+
 ## [0.2.0] - 2026-08-14
 
 ### Changed
