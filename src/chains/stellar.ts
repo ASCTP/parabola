@@ -7,23 +7,25 @@ import {
   scValToNative,
   rpc,
 } from "@stellar/stellar-sdk";
-import { STELLAR_TESTNET, STELLAR_TX_TIMEOUT_SECONDS, STELLAR_CONFIRMATION_TIMEOUT_MS } from "../constants.js";
-import type { StellarSigner } from "../types.js";
+import { stellarConfig, STELLAR_TX_TIMEOUT_SECONDS, STELLAR_CONFIRMATION_TIMEOUT_MS } from "../constants.js";
+import type { StellarSigner, Network } from "../types.js";
 import { SubmissionTimeoutError } from "../errors.js";
 
-function getServer(): rpc.Server {
-  return new rpc.Server(STELLAR_TESTNET.sorobanRpcUrl);
+function getServer(network: Network, rpcUrl?: string): rpc.Server {
+  return new rpc.Server(rpcUrl ?? stellarConfig(network).sorobanRpcUrl);
 }
 
 async function signTransaction(
   xdr: string,
   signer: StellarSigner,
+  network: Network,
 ): Promise<string> {
+  const passphrase = stellarConfig(network).networkPassphrase;
   if (signer.signTransaction) {
-    return signer.signTransaction(xdr, STELLAR_TESTNET.networkPassphrase);
+    return signer.signTransaction(xdr, passphrase);
   }
   if (signer.keypair) {
-    const tx = TransactionBuilder.fromXDR(xdr, STELLAR_TESTNET.networkPassphrase);
+    const tx = TransactionBuilder.fromXDR(xdr, passphrase);
     tx.sign(signer.keypair);
     return tx.toXDR();
   }
@@ -39,22 +41,24 @@ async function invokeContract(
   method: string,
   args: ReturnType<typeof nativeToScVal>[],
   signer: StellarSigner,
+  network: Network,
+  rpcUrl?: string,
 ): Promise<string> {
-  const server = getServer();
+  const server = getServer(network, rpcUrl);
   const account = await server.getAccount(signer.publicKey);
   const contract = new Contract(contractId);
 
   const builtTx = new TransactionBuilder(account, {
     fee: BASE_FEE,
-    networkPassphrase: STELLAR_TESTNET.networkPassphrase,
+    networkPassphrase: stellarConfig(network).networkPassphrase,
   })
     .addOperation(contract.call(method, ...args))
     .setTimeout(STELLAR_TX_TIMEOUT_SECONDS)
     .build();
 
   const prepared = await server.prepareTransaction(builtTx);
-  const signedXdr = await signTransaction(prepared.toXDR(), signer);
-  const signedTx = TransactionBuilder.fromXDR(signedXdr, STELLAR_TESTNET.networkPassphrase);
+  const signedXdr = await signTransaction(prepared.toXDR(), signer, network);
+  const signedTx = TransactionBuilder.fromXDR(signedXdr, stellarConfig(network).networkPassphrase);
 
   const sendResult = await server.sendTransaction(signedTx);
   if (sendResult.status === "ERROR") {
@@ -90,19 +94,22 @@ async function pollTransactionStatus(server: rpc.Server, hash: string): Promise<
 export async function approveUsdcOnStellar(
   amountRaw: bigint,
   signer: StellarSigner,
+  network: Network,
+  rpcUrl?: string,
 ): Promise<string> {
-  const server = getServer();
+  const stellar = stellarConfig(network);
+  const server = getServer(network, rpcUrl);
   const latestLedger = await server.getLatestLedger();
   const expirationLedger = latestLedger.sequence + 100_000;
 
   const args = [
     Address.fromString(signer.publicKey).toScVal(),
-    Address.fromString(STELLAR_TESTNET.tokenMessengerMinter).toScVal(),
+    Address.fromString(stellar.tokenMessengerMinter).toScVal(),
     nativeToScVal(amountRaw, { type: "i128" }),
     nativeToScVal(expirationLedger, { type: "u32" }),
   ];
 
-  const approveTxHash = await invokeContract(STELLAR_TESTNET.usdc, "approve", args, signer);
+  const approveTxHash = await invokeContract(stellar.usdc, "approve", args, signer, network, rpcUrl);
 
   // The approve tx above is confirmed (SUCCESS) by this point, but a subsequent
   // deposit_for_burn call's simulation has still been observed reading a stale
@@ -111,7 +118,7 @@ export async function approveUsdcOnStellar(
   // call. Actively poll the real on-chain allowance until it reflects the approval
   // (or give up with a clear error) rather than handing back control while the two
   // calls' views of state can still disagree.
-  await waitForAllowance(signer.publicKey, STELLAR_TESTNET.tokenMessengerMinter, amountRaw);
+  await waitForAllowance(signer.publicKey, stellar.tokenMessengerMinter, amountRaw, network, rpcUrl);
 
   return approveTxHash;
 }
@@ -135,8 +142,13 @@ const MISSING_TRUSTLINE_MESSAGE = "trustline entry is missing for account";
  * trustline makes the balance() simulation fail with Error(Contract, #13) /
  * "trustline entry is missing for account", rather than succeeding with a balance of 0.
  */
-export async function checkStellarRecipientReady(recipient: string): Promise<StellarRecipientStatus> {
-  const server = getServer();
+export async function checkStellarRecipientReady(
+  recipient: string,
+  network: Network = "mainnet",
+  rpcUrl?: string,
+): Promise<StellarRecipientStatus> {
+  const stellar = stellarConfig(network);
+  const server = getServer(network, rpcUrl);
 
   let account;
   try {
@@ -145,10 +157,10 @@ export async function checkStellarRecipientReady(recipient: string): Promise<Ste
     return { exists: false, hasTrustline: false, ready: false };
   }
 
-  const contract = new Contract(STELLAR_TESTNET.usdc);
+  const contract = new Contract(stellar.usdc);
   const tx = new TransactionBuilder(account, {
     fee: BASE_FEE,
-    networkPassphrase: STELLAR_TESTNET.networkPassphrase,
+    networkPassphrase: stellar.networkPassphrase,
   })
     .addOperation(contract.call("balance", Address.fromString(recipient).toScVal()))
     .setTimeout(30)
@@ -165,14 +177,20 @@ export async function checkStellarRecipientReady(recipient: string): Promise<Ste
   return { exists: true, hasTrustline: true, ready: true };
 }
 
-async function getUsdcAllowance(owner: string, spender: string): Promise<bigint> {
-  const server = getServer();
+async function getUsdcAllowance(
+  owner: string,
+  spender: string,
+  network: Network,
+  rpcUrl?: string,
+): Promise<bigint> {
+  const stellar = stellarConfig(network);
+  const server = getServer(network, rpcUrl);
   const account = await server.getAccount(owner);
-  const contract = new Contract(STELLAR_TESTNET.usdc);
+  const contract = new Contract(stellar.usdc);
 
   const tx = new TransactionBuilder(account, {
     fee: BASE_FEE,
-    networkPassphrase: STELLAR_TESTNET.networkPassphrase,
+    networkPassphrase: stellar.networkPassphrase,
   })
     .addOperation(
       contract.call("allowance", Address.fromString(owner).toScVal(), Address.fromString(spender).toScVal()),
@@ -190,11 +208,17 @@ async function getUsdcAllowance(owner: string, spender: string): Promise<bigint>
   return BigInt(scValToNative(sim.result.retval));
 }
 
-async function waitForAllowance(owner: string, spender: string, minimum: bigint): Promise<void> {
+async function waitForAllowance(
+  owner: string,
+  spender: string,
+  minimum: bigint,
+  network: Network,
+  rpcUrl?: string,
+): Promise<void> {
   const attempts = 6;
   const delayMs = 1500;
   for (let i = 0; i < attempts; i++) {
-    const allowance = await getUsdcAllowance(owner, spender);
+    const allowance = await getUsdcAllowance(owner, spender, network, rpcUrl);
     if (allowance >= minimum) return;
     await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
@@ -214,7 +238,10 @@ export async function burnUsdcOnStellar(params: {
   maxFeeRaw: bigint;
   minFinalityThreshold: number;
   signer: StellarSigner;
+  network: Network;
+  rpcUrl?: string;
 }): Promise<string> {
+  const stellar = stellarConfig(params.network);
   const recipientBytes = Buffer.from(params.mintRecipientBytes32.slice(2), "hex");
 
   // Argument order per the deployed contract's interface (stellar contract info
@@ -227,7 +254,7 @@ export async function burnUsdcOnStellar(params: {
     nativeToScVal(params.amountRaw, { type: "i128" }),
     nativeToScVal(params.destinationDomain, { type: "u32" }),
     nativeToScVal(recipientBytes, { type: "bytes" }),
-    Address.fromString(STELLAR_TESTNET.usdc).toScVal(),
+    Address.fromString(stellar.usdc).toScVal(),
     nativeToScVal(Buffer.alloc(32), { type: "bytes" }), // destinationCaller: unrestricted
     nativeToScVal(params.maxFeeRaw, { type: "i128" }),
     nativeToScVal(params.minFinalityThreshold, { type: "u32" }),
@@ -242,7 +269,7 @@ export async function burnUsdcOnStellar(params: {
   // sequence bump yet. Both retry the same way: invokeContract() re-fetches the account
   // fresh on every call, so trying again gives it a chance to hit a caught-up node.
   return retryOnTransientRpcLag(() =>
-    invokeContract(STELLAR_TESTNET.tokenMessengerMinter, "deposit_for_burn", args, params.signer),
+    invokeContract(stellar.tokenMessengerMinter, "deposit_for_burn", args, params.signer, params.network, params.rpcUrl),
   );
 }
 
@@ -278,11 +305,14 @@ export async function mintAndForwardOnStellar(params: {
   message: `0x${string}`;
   attestation: `0x${string}`;
   signer: StellarSigner;
+  network: Network;
+  rpcUrl?: string;
 }): Promise<string> {
+  const stellar = stellarConfig(params.network);
   const args = [
     nativeToScVal(Buffer.from(params.message.slice(2), "hex"), { type: "bytes" }),
     nativeToScVal(Buffer.from(params.attestation.slice(2), "hex"), { type: "bytes" }),
   ];
 
-  return invokeContract(STELLAR_TESTNET.cctpForwarder, "mint_and_forward", args, params.signer);
+  return invokeContract(stellar.cctpForwarder, "mint_and_forward", args, params.signer, params.network, params.rpcUrl);
 }

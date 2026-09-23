@@ -21,10 +21,11 @@ export async function estimateFee(params: EstimateFeeParams): Promise<FeeEstimat
     };
   }
 
+  const network = params.network ?? "mainnet";
   const feeBps = await fetchFastTransferFeeBps(
     domainFor(params.from),
     domainFor(params.to),
-    true,
+    network === "testnet",
   );
 
   const amountRaw = toRawAmount(params.amount, params.from);

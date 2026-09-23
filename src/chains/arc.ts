@@ -1,6 +1,6 @@
 import { createPublicClient, http, defineChain, type Hex } from "viem";
-import { ARC_TESTNET } from "../constants.js";
-import type { ArcSigner } from "../types.js";
+import { ARC_TESTNET, ARC_MAINNET, arcConfig } from "../constants.js";
+import type { ArcSigner, Network } from "../types.js";
 import { SubmissionTimeoutError } from "../errors.js";
 
 export const arcTestnetChain = defineChain({
@@ -15,6 +15,23 @@ export const arcTestnetChain = defineChain({
   },
   testnet: true,
 });
+
+export const arcMainnetChain = defineChain({
+  id: ARC_MAINNET.chainId,
+  name: "Arc",
+  nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
+  rpcUrls: {
+    default: { http: [ARC_MAINNET.rpcUrl] },
+  },
+  blockExplorers: {
+    default: { name: "Arc Explorer", url: ARC_MAINNET.explorerUrl },
+  },
+  testnet: false,
+});
+
+function chainFor(network: Network) {
+  return network === "mainnet" ? arcMainnetChain : arcTestnetChain;
+}
 
 const tokenMessengerV2Abi = [
   {
@@ -76,8 +93,9 @@ const erc20Abi = [
   },
 ] as const;
 
-function publicClient() {
-  return createPublicClient({ chain: arcTestnetChain, transport: http(ARC_TESTNET.rpcUrl) });
+function publicClient(network: Network) {
+  const chain = chainFor(network);
+  return createPublicClient({ chain, transport: http(arcConfig(network).rpcUrl) });
 }
 
 type WriteContractRequest = Omit<
@@ -85,7 +103,7 @@ type WriteContractRequest = Omit<
   "chain" | "account"
 >;
 
-async function writeAndWait(signer: ArcSigner, request: WriteContractRequest) {
+async function writeAndWait(signer: ArcSigner, request: WriteContractRequest, network: Network) {
   const account = signer.walletClient.account;
   if (!account) {
     throw new Error("ArcSigner's walletClient must have an account attached");
@@ -93,10 +111,10 @@ async function writeAndWait(signer: ArcSigner, request: WriteContractRequest) {
   const hash = await signer.walletClient.writeContract({
     ...request,
     account,
-    chain: arcTestnetChain,
+    chain: chainFor(network),
   } as Parameters<ArcSigner["walletClient"]["writeContract"]>[0]);
   try {
-    await publicClient().waitForTransactionReceipt({ hash });
+    await publicClient(network).waitForTransactionReceipt({ hash });
   } catch (err) {
     // The transaction was already broadcast (hash exists); a failure here means we
     // couldn't confirm it in time, not that it didn't happen. Surface the hash instead
@@ -108,13 +126,22 @@ async function writeAndWait(signer: ArcSigner, request: WriteContractRequest) {
 }
 
 /** Approves the TokenMessengerV2 contract to spend USDC on the signer's behalf. */
-export async function approveUsdcOnArc(signer: ArcSigner, amountRaw: bigint): Promise<Hex> {
-  return writeAndWait(signer, {
-    address: ARC_TESTNET.usdc as Hex,
-    abi: erc20Abi,
-    functionName: "approve",
-    args: [ARC_TESTNET.tokenMessengerV2 as Hex, amountRaw],
-  });
+export async function approveUsdcOnArc(
+  signer: ArcSigner,
+  amountRaw: bigint,
+  network: Network,
+): Promise<Hex> {
+  const arc = arcConfig(network);
+  return writeAndWait(
+    signer,
+    {
+      address: arc.usdc as Hex,
+      abi: erc20Abi,
+      functionName: "approve",
+      args: [arc.tokenMessengerV2 as Hex, amountRaw],
+    },
+    network,
+  );
 }
 
 /** Burns USDC on Arc via TokenMessengerV2.depositForBurn for a plain (non-Stellar) destination. */
@@ -125,21 +152,27 @@ export async function burnUsdcOnArc(params: {
   maxFeeRaw: bigint;
   minFinalityThreshold: number;
   signer: ArcSigner;
+  network: Network;
 }): Promise<Hex> {
-  return writeAndWait(params.signer, {
-    address: ARC_TESTNET.tokenMessengerV2 as Hex,
-    abi: tokenMessengerV2Abi,
-    functionName: "depositForBurn",
-    args: [
-      params.amountRaw,
-      params.destinationDomain,
-      params.mintRecipientBytes32,
-      ARC_TESTNET.usdc as Hex,
-      `0x${"0".repeat(64)}` as Hex,
-      params.maxFeeRaw,
-      params.minFinalityThreshold,
-    ],
-  });
+  const arc = arcConfig(params.network);
+  return writeAndWait(
+    params.signer,
+    {
+      address: arc.tokenMessengerV2 as Hex,
+      abi: tokenMessengerV2Abi,
+      functionName: "depositForBurn",
+      args: [
+        params.amountRaw,
+        params.destinationDomain,
+        params.mintRecipientBytes32,
+        arc.usdc as Hex,
+        `0x${"0".repeat(64)}` as Hex,
+        params.maxFeeRaw,
+        params.minFinalityThreshold,
+      ],
+    },
+    params.network,
+  );
 }
 
 /**
@@ -155,22 +188,28 @@ export async function burnUsdcOnArcWithStellarForward(params: {
   minFinalityThreshold: number;
   hookData: Hex;
   signer: ArcSigner;
+  network: Network;
 }): Promise<Hex> {
-  return writeAndWait(params.signer, {
-    address: ARC_TESTNET.tokenMessengerV2 as Hex,
-    abi: tokenMessengerV2Abi,
-    functionName: "depositForBurnWithHook",
-    args: [
-      params.amountRaw,
-      params.destinationDomain,
-      params.mintRecipientBytes32,
-      ARC_TESTNET.usdc as Hex,
-      `0x${"0".repeat(64)}` as Hex,
-      params.maxFeeRaw,
-      params.minFinalityThreshold,
-      params.hookData,
-    ],
-  });
+  const arc = arcConfig(params.network);
+  return writeAndWait(
+    params.signer,
+    {
+      address: arc.tokenMessengerV2 as Hex,
+      abi: tokenMessengerV2Abi,
+      functionName: "depositForBurnWithHook",
+      args: [
+        params.amountRaw,
+        params.destinationDomain,
+        params.mintRecipientBytes32,
+        arc.usdc as Hex,
+        `0x${"0".repeat(64)}` as Hex,
+        params.maxFeeRaw,
+        params.minFinalityThreshold,
+        params.hookData,
+      ],
+    },
+    params.network,
+  );
 }
 
 /** Submits an attested CCTP message on Arc via MessageTransmitterV2.receiveMessage. */
@@ -178,11 +217,17 @@ export async function receiveMessageOnArc(params: {
   message: Hex;
   attestation: Hex;
   signer: ArcSigner;
+  network: Network;
 }): Promise<Hex> {
-  return writeAndWait(params.signer, {
-    address: ARC_TESTNET.messageTransmitterV2 as Hex,
-    abi: messageTransmitterV2Abi,
-    functionName: "receiveMessage",
-    args: [params.message, params.attestation],
-  });
+  const arc = arcConfig(params.network);
+  return writeAndWait(
+    params.signer,
+    {
+      address: arc.messageTransmitterV2 as Hex,
+      abi: messageTransmitterV2Abi,
+      functionName: "receiveMessage",
+      args: [params.message, params.attestation],
+    },
+    params.network,
+  );
 }

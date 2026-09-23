@@ -2,6 +2,8 @@ import type { WalletClient } from "viem";
 import type { Keypair } from "@stellar/stellar-sdk";
 
 export type ChainId = "arc" | "stellar";
+/** Which deployment to transact against. Defaults to "mainnet" wherever it is accepted. */
+export type Network = "mainnet" | "testnet";
 export type TransferSpeed = "standard" | "fast";
 export type TransferMode = "standard" | "fast";
 export type TransferStatus = "success" | "pending" | "failed";
@@ -29,8 +31,11 @@ export interface TransferOptions {
   pollInterval?: number;
   /** Milliseconds before polling gives up. Default 300000. */
   pollTimeout?: number;
-  /** Use Circle's sandbox Iris API. Default true (testnet only SDK). */
-  useSandbox?: boolean;
+  /**
+   * Overrides the Stellar Soroban RPC URL. The mainnet default endpoint is
+   * rate-limited; supply your own provider for real usage. No effect on Arc.
+   */
+  stellarRpcUrl?: string;
   /**
    * Signer for the destination-chain completion call (receiveMessage on Arc,
    * mint_and_forward on Stellar). This is a separate signature from `signer`
@@ -51,6 +56,8 @@ export interface TransferParams {
   recipient: string;
   speed: TransferSpeed;
   signer: Signer;
+  /** Which deployment to transact against. Default "mainnet". */
+  network?: Network;
   options?: TransferOptions;
 }
 
@@ -69,6 +76,8 @@ export interface EstimateFeeParams {
   to: ChainId;
   amount: string;
   speed: TransferSpeed;
+  /** Which deployment to quote against. Default "mainnet". */
+  network?: Network;
 }
 
 export interface FeeEstimate {
@@ -86,9 +95,12 @@ export interface CompleteMintParams {
   burnTxHash: string;
   /** Signer native to the destination chain, used to submit receiveMessage / mint_and_forward. */
   signer: Signer;
+  /** Which deployment the original transfer ran on. Default "mainnet". */
+  network?: Network;
   pollInterval?: number;
   pollTimeout?: number;
-  useSandbox?: boolean;
+  /** Overrides the Stellar Soroban RPC URL. No effect on Arc. */
+  stellarRpcUrl?: string;
 }
 
 export interface CompleteMintResult {

@@ -6,13 +6,14 @@ import type {
   StellarSigner,
   ChainId,
   Signer,
+  Network,
   CompleteMintParams,
   CompleteMintResult,
 } from "./types.js";
 import {
   ARC_DOMAIN,
   STELLAR_DOMAIN,
-  STELLAR_TESTNET,
+  stellarConfig,
   FINALITY_THRESHOLD_STANDARD,
   FINALITY_THRESHOLD_FAST,
   DEFAULT_POLL_INTERVAL_MS,
@@ -39,7 +40,9 @@ function domainFor(chain: "arc" | "stellar"): number {
 export async function transfer(params: TransferParams): Promise<TransferResult> {
   const start = Date.now();
   const options = params.options ?? {};
-  const useSandbox = options.useSandbox ?? true;
+  const network: Network = params.network ?? "mainnet";
+  const useSandbox = network === "testnet";
+  const stellarRpcUrl = options.stellarRpcUrl;
   const pollInterval = options.pollInterval ?? DEFAULT_POLL_INTERVAL_MS;
   const pollTimeout = options.pollTimeout ?? DEFAULT_POLL_TIMEOUT_MS;
 
@@ -73,6 +76,8 @@ export async function transfer(params: TransferParams): Promise<TransferResult> 
 
   const burnTxHash = await burn({
     params,
+    network,
+    stellarRpcUrl,
     amountRaw,
     maxFeeRaw,
     minFinalityThreshold,
@@ -102,6 +107,8 @@ export async function transfer(params: TransferParams): Promise<TransferResult> 
         message: attestation.message as `0x${string}`,
         attestation: attestation.attestation as `0x${string}`,
         signer: options.destinationSigner,
+        network,
+        stellarRpcUrl,
       });
       status = "success";
     }
@@ -123,28 +130,30 @@ export async function transfer(params: TransferParams): Promise<TransferResult> 
 
 async function burn(args: {
   params: TransferParams;
+  network: Network;
+  stellarRpcUrl?: string;
   amountRaw: bigint;
   maxFeeRaw: bigint;
   minFinalityThreshold: number;
 }): Promise<string> {
-  const { params, amountRaw, maxFeeRaw, minFinalityThreshold } = args;
+  const { params, network, stellarRpcUrl, amountRaw, maxFeeRaw, minFinalityThreshold } = args;
 
   if (params.from === "arc") {
     const signer = params.signer as ArcSigner;
 
     if (params.to === "stellar") {
-      await assertStellarRecipientReady(params.recipient);
+      await assertStellarRecipientReady(params.recipient, network, stellarRpcUrl);
     }
 
     // TokenMessengerV2 pulls USDC via transferFrom under the hood; it must be
     // approved to spend at least amountRaw before depositForBurn(WithHook) will
     // succeed. Approving the exact amount per call avoids leaving a standing
     // allowance beyond what this transfer needs.
-    await approveUsdcOnArc(signer, amountRaw);
+    await approveUsdcOnArc(signer, amountRaw, network);
     return runBurn(() => {
       if (params.to === "stellar") {
         const hookData = encodeStellarForwardHook(params.recipient);
-        const mintRecipientBytes32 = stellarAddressToBytes32(STELLAR_TESTNET.cctpForwarder);
+        const mintRecipientBytes32 = stellarAddressToBytes32(stellarConfig(network).cctpForwarder);
         return burnUsdcOnArcWithStellarForward({
           amountRaw,
           destinationDomain: STELLAR_DOMAIN,
@@ -153,6 +162,7 @@ async function burn(args: {
           minFinalityThreshold,
           hookData,
           signer,
+          network,
         });
       }
       const mintRecipientBytes32 = evmAddressToBytes32(params.recipient);
@@ -163,6 +173,7 @@ async function burn(args: {
         maxFeeRaw,
         minFinalityThreshold,
         signer,
+        network,
       });
     });
   }
@@ -171,7 +182,7 @@ async function burn(args: {
   const mintRecipientBytes32 = evmAddressToBytes32(params.recipient);
   // Stellar's SEP-41 USDC token requires the same approve-before-transfer_from
   // pattern as ERC20 on Arc.
-  await approveUsdcOnStellar(amountRaw, signer);
+  await approveUsdcOnStellar(amountRaw, signer, network, stellarRpcUrl);
   return runBurn(() =>
     burnUsdcOnStellar({
       amountRaw,
@@ -180,6 +191,8 @@ async function burn(args: {
       maxFeeRaw,
       minFinalityThreshold,
       signer,
+      network,
+      rpcUrl: stellarRpcUrl,
     }),
   );
 }
@@ -190,8 +203,12 @@ async function burn(args: {
  * a failed mint_and_forward call after the burn has already gone through, leaving USDC
  * stuck at the CctpForwarder with no way back to the sender.
  */
-async function assertStellarRecipientReady(recipient: string): Promise<void> {
-  const status = await checkStellarRecipientReady(recipient);
+async function assertStellarRecipientReady(
+  recipient: string,
+  network: Network,
+  rpcUrl?: string,
+): Promise<void> {
+  const status = await checkStellarRecipientReady(recipient, network, rpcUrl);
   if (!status.exists) {
     throw new Error(
       `Stellar recipient ${recipient} does not exist yet. It must be funded with at least the minimum XLM reserve before it can receive USDC.`,
@@ -227,13 +244,21 @@ async function mint(args: {
   message: `0x${string}`;
   attestation: `0x${string}`;
   signer: Signer;
+  network: Network;
+  stellarRpcUrl?: string;
 }): Promise<string> {
-  const { to, message, attestation, signer } = args;
+  const { to, message, attestation, signer, network, stellarRpcUrl } = args;
 
   if (to === "arc") {
-    return receiveMessageOnArc({ message, attestation, signer: signer as ArcSigner });
+    return receiveMessageOnArc({ message, attestation, signer: signer as ArcSigner, network });
   }
-  return mintAndForwardOnStellar({ message, attestation, signer: signer as StellarSigner });
+  return mintAndForwardOnStellar({
+    message,
+    attestation,
+    signer: signer as StellarSigner,
+    network,
+    rpcUrl: stellarRpcUrl,
+  });
 }
 
 /**
@@ -243,7 +268,8 @@ async function mint(args: {
  * receiveMessage on Arc, or mint_and_forward on Stellar's CctpForwarder.
  */
 export async function completeMint(params: CompleteMintParams): Promise<CompleteMintResult> {
-  const useSandbox = params.useSandbox ?? true;
+  const network: Network = params.network ?? "mainnet";
+  const useSandbox = network === "testnet";
   const pollInterval = params.pollInterval ?? DEFAULT_POLL_INTERVAL_MS;
   const pollTimeout = params.pollTimeout ?? DEFAULT_POLL_TIMEOUT_MS;
 
@@ -264,6 +290,8 @@ export async function completeMint(params: CompleteMintParams): Promise<Complete
     message: attestation.message as `0x${string}`,
     attestation: attestation.attestation as `0x${string}`,
     signer: params.signer,
+    network,
+    stellarRpcUrl: params.stellarRpcUrl,
   });
 
   return { mintTxHash, attestationHash: attestation.attestation };

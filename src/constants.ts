@@ -1,5 +1,13 @@
-// Values sourced from Circle CCTP docs (developers.circle.com/cctp) and Arc docs (docs.arc.io) as of 2026-07.
-// Testnet only: Arc mainnet CCTP addresses are not yet published.
+// Contract addresses and network parameters sourced from official docs, never inferred:
+// Circle CCTP (developers.circle.com/cctp/evm-smart-contracts and .../references/stellar-contracts),
+// Arc (docs.arc.io/arc/references/connect-to-arc and .../contract-addresses), and Circle's USDC
+// contract list (developers.circle.com/stablecoins/usdc-contract-addresses). Verified 2026-09-23.
+// The Stellar mainnet USDC SAC is the deterministic Stellar Asset Contract ID for
+// USDC-GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN on the public network; the same
+// derivation reproduces the known testnet USDC SAC exactly. pnpm verify:addresses confirms every
+// address below is live on its network.
+
+import type { Network } from "./types.js";
 
 export const ARC_DOMAIN = 26;
 export const STELLAR_DOMAIN = 27;
@@ -15,6 +23,18 @@ export const ARC_TESTNET = {
   usdcDecimals: 6,
 } as const;
 
+export const ARC_MAINNET = {
+  chainId: 5042,
+  rpcUrl: "https://rpc.mainnet.arc.io",
+  // Arc docs list no primary mainnet wss endpoint (only third-party providers). Unused by the SDK.
+  wsUrl: "",
+  explorerUrl: "https://explorer.arc.io",
+  tokenMessengerV2: "0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d",
+  messageTransmitterV2: "0x81D40F21F12A8F0E3252Bccb954D722d4c464B64",
+  usdc: "0x3600000000000000000000000000000000000000",
+  usdcDecimals: 6,
+} as const;
+
 export const STELLAR_TESTNET = {
   sorobanRpcUrl: "https://soroban-testnet.stellar.org",
   horizonUrl: "https://horizon-testnet.stellar.org",
@@ -25,10 +45,29 @@ export const STELLAR_TESTNET = {
   usdcDecimals: 7,
 } as const;
 
-export const STELLAR_MAINNET_CONTRACTS = {
+export const STELLAR_MAINNET = {
+  // Stellar runs no free public production Soroban RPC. This SDF-adjacent public endpoint works
+  // out of the box but is rate-limited; callers should override it with their own provider for
+  // real usage (options.stellarRpcUrl on transfer/completeMint).
+  sorobanRpcUrl: "https://mainnet.sorobanrpc.com",
+  horizonUrl: "https://horizon.stellar.org",
+  networkPassphrase: "Public Global Stellar Network ; September 2015",
   tokenMessengerMinter: "CAE2G5Z77UP7GYPYGFOWFGW7C7J6I4YP2AFGSADRKQY62SYUFLPNFTXL",
   cctpForwarder: "CBZL2IH7F6BIDAA3WBNXYKIXSATJGMSW7K5P5MJ6STX5RXN47TZJDF5T",
+  usdc: "CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75",
+  usdcDecimals: 7,
 } as const;
+
+export type ArcConfig = typeof ARC_TESTNET | typeof ARC_MAINNET;
+export type StellarConfig = typeof STELLAR_TESTNET | typeof STELLAR_MAINNET;
+
+export function arcConfig(network: Network): ArcConfig {
+  return network === "mainnet" ? ARC_MAINNET : ARC_TESTNET;
+}
+
+export function stellarConfig(network: Network): StellarConfig {
+  return network === "mainnet" ? STELLAR_MAINNET : STELLAR_TESTNET;
+}
 
 export const IRIS_MAINNET_BASE_URL = "https://iris-api.circle.com/v2/";
 export const IRIS_SANDBOX_BASE_URL = "https://iris-api-sandbox.circle.com/v2/";
