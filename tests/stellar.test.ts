@@ -52,6 +52,7 @@ describe("burnUsdcOnStellar (TokenMessengerMinter.deposit_for_burn)", () => {
       maxFeeRaw: 1000n,
       minFinalityThreshold: 2000,
       signer: { publicKey: signerKeypair.publicKey(), keypair: signerKeypair },
+      network: "testnet",
     });
 
     expect(hash).toBe(FAKE_HASH);
@@ -76,6 +77,7 @@ describe("burnUsdcOnStellar (TokenMessengerMinter.deposit_for_burn)", () => {
       maxFeeRaw: 1000n,
       minFinalityThreshold: 2000,
       signer: { publicKey: signerKeypair.publicKey(), keypair: signerKeypair },
+      network: "testnet",
     });
 
     expect(hash).toBe(FAKE_HASH);
@@ -98,6 +100,7 @@ describe("burnUsdcOnStellar (TokenMessengerMinter.deposit_for_burn)", () => {
       maxFeeRaw: 1000n,
       minFinalityThreshold: 2000,
       signer: { publicKey: signerKeypair.publicKey(), keypair: signerKeypair },
+      network: "testnet",
     });
 
     expect(hash).toBe(FAKE_HASH);
@@ -118,6 +121,7 @@ describe("burnUsdcOnStellar (TokenMessengerMinter.deposit_for_burn)", () => {
         maxFeeRaw: 1000n,
         minFinalityThreshold: 2000,
         signer: { publicKey: signerKeypair.publicKey(), keypair: signerKeypair },
+        network: "testnet",
       }),
     ).rejects.toThrow("some unrelated simulation failure");
   });
@@ -146,7 +150,7 @@ describe("approveUsdcOnStellar", () => {
     const hash = await approveUsdcOnStellar(10_000_000n, {
       publicKey: signerKeypair.publicKey(),
       keypair: signerKeypair,
-    });
+    }, "testnet");
 
     expect(hash).toBe(FAKE_HASH);
     expect(simulate).toHaveBeenCalledTimes(2);
@@ -162,7 +166,7 @@ describe("approveUsdcOnStellar", () => {
 
     const signerKeypair = Keypair.random();
     await expect(
-      approveUsdcOnStellar(10_000_000n, { publicKey: signerKeypair.publicKey(), keypair: signerKeypair }),
+      approveUsdcOnStellar(10_000_000n, { publicKey: signerKeypair.publicKey(), keypair: signerKeypair }, "testnet"),
     ).rejects.toThrow(/did not reach/);
   }, 15_000);
 });
@@ -228,6 +232,7 @@ describe("mintAndForwardOnStellar (CctpForwarder.mint_and_forward)", () => {
       message: `0x${"11".repeat(32)}`,
       attestation: `0x${"22".repeat(65)}`,
       signer: { publicKey: signerKeypair.publicKey(), keypair: signerKeypair },
+      network: "testnet",
     });
 
     expect(hash).toBe(FAKE_HASH);

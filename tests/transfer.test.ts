@@ -167,6 +167,8 @@ describe("transfer (Arc -> Stellar)", () => {
 
     expect(checkStellarRecipientReady).toHaveBeenCalledWith(
       "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI",
+      "mainnet",
+      undefined,
     );
   });
 
@@ -247,6 +249,76 @@ describe("transfer (Stellar -> Arc)", () => {
     expect(receiveMessageOnArc).toHaveBeenCalledTimes(1);
     expect(result.burnTxHash).toBe("stellarburnhash");
     expect(result.mintTxHash).toBe("0xminthash");
+  });
+});
+
+describe("transfer network selection", () => {
+  it("defaults to mainnet: burns with network mainnet and polls the production Iris API", async () => {
+    await transfer({
+      from: "arc",
+      to: "stellar",
+      amount: "10",
+      recipient: "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI",
+      speed: "standard",
+      signer: arcSigner,
+      options: { destinationSigner: stellarSigner },
+    });
+
+    expect(burnUsdcOnArcWithStellarForward.mock.calls[0]?.[0].network).toBe("mainnet");
+    expect(mintAndForwardOnStellar.mock.calls[0]?.[0].network).toBe("mainnet");
+    expect(pollForAttestation.mock.calls[0]?.[0].useSandbox).toBe(false);
+  });
+
+  it("routes explicit testnet to the testnet config and the sandbox Iris API", async () => {
+    await transfer({
+      from: "arc",
+      to: "stellar",
+      amount: "10",
+      recipient: "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI",
+      speed: "standard",
+      signer: arcSigner,
+      network: "testnet",
+      options: { destinationSigner: stellarSigner },
+    });
+
+    expect(checkStellarRecipientReady).toHaveBeenCalledWith(
+      "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI",
+      "testnet",
+      undefined,
+    );
+    expect(burnUsdcOnArcWithStellarForward.mock.calls[0]?.[0].network).toBe("testnet");
+    expect(pollForAttestation.mock.calls[0]?.[0].useSandbox).toBe(true);
+  });
+
+  it("threads a Stellar RPC override into the recipient check and mint call", async () => {
+    await transfer({
+      from: "arc",
+      to: "stellar",
+      amount: "10",
+      recipient: "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI",
+      speed: "standard",
+      signer: arcSigner,
+      options: { destinationSigner: stellarSigner, stellarRpcUrl: "https://my-soroban.example/rpc" },
+    });
+
+    expect(checkStellarRecipientReady).toHaveBeenCalledWith(
+      "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI",
+      "mainnet",
+      "https://my-soroban.example/rpc",
+    );
+    expect(mintAndForwardOnStellar.mock.calls[0]?.[0].rpcUrl).toBe("https://my-soroban.example/rpc");
+  });
+
+  it("completeMint defaults to mainnet and polls the production Iris API", async () => {
+    await completeMint({
+      from: "arc",
+      to: "stellar",
+      burnTxHash: "0xburnhookhash",
+      signer: stellarSigner,
+    });
+
+    expect(pollForAttestation.mock.calls[0]?.[0].useSandbox).toBe(false);
+    expect(mintAndForwardOnStellar.mock.calls[0]?.[0].network).toBe("mainnet");
   });
 });
 

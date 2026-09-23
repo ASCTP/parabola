@@ -16,7 +16,7 @@ const {
   burnUsdcOnArcWithStellarForward,
   receiveMessageOnArc,
 } = await import("../src/chains/arc.js");
-const { ARC_TESTNET } = await import("../src/constants.js");
+const { ARC_TESTNET, ARC_MAINNET } = await import("../src/constants.js");
 
 const FAKE_HASH = "0x" + "a".repeat(64);
 const ZERO_BYTES32 = `0x${"0".repeat(64)}`;
@@ -41,7 +41,7 @@ describe("approveUsdcOnArc", () => {
   it("calls approve on the USDC contract with the TokenMessengerV2 as spender", async () => {
     const { signer, writeContract } = makeSigner();
 
-    const hash = await approveUsdcOnArc(signer, 10_000_000n);
+    const hash = await approveUsdcOnArc(signer, 10_000_000n, "testnet");
 
     expect(hash).toBe(FAKE_HASH);
     expect(writeContract).toHaveBeenCalledTimes(1);
@@ -50,6 +50,16 @@ describe("approveUsdcOnArc", () => {
     expect(call.functionName).toBe("approve");
     expect(call.args).toEqual([ARC_TESTNET.tokenMessengerV2, 10_000_000n]);
     expect(waitForTransactionReceipt).toHaveBeenCalledWith({ hash: FAKE_HASH });
+  });
+
+  it("targets the mainnet USDC and TokenMessengerV2 when network is mainnet", async () => {
+    const { signer, writeContract } = makeSigner();
+
+    await approveUsdcOnArc(signer, 10_000_000n, "mainnet");
+
+    const call = writeContract.mock.calls[0]?.[0];
+    expect(call.address).toBe(ARC_MAINNET.usdc);
+    expect(call.args).toEqual([ARC_MAINNET.tokenMessengerV2, 10_000_000n]);
   });
 });
 
@@ -65,6 +75,7 @@ describe("burnUsdcOnArc", () => {
       maxFeeRaw: 100n,
       minFinalityThreshold: 2000,
       signer,
+      network: "testnet",
     });
 
     const call = writeContract.mock.calls[0]?.[0];
@@ -96,6 +107,7 @@ describe("burnUsdcOnArcWithStellarForward", () => {
       minFinalityThreshold: 1000,
       hookData,
       signer,
+      network: "testnet",
     });
 
     const call = writeContract.mock.calls[0]?.[0];
@@ -120,7 +132,7 @@ describe("receiveMessageOnArc", () => {
     const message = `0x${"44".repeat(20)}` as const;
     const attestation = `0x${"55".repeat(65)}` as const;
 
-    const hash = await receiveMessageOnArc({ message, attestation, signer });
+    const hash = await receiveMessageOnArc({ message, attestation, signer, network: "testnet" });
 
     expect(hash).toBe(FAKE_HASH);
     const call = writeContract.mock.calls[0]?.[0];
@@ -136,7 +148,7 @@ describe("signer validation", () => {
       walletClient: { account: undefined, writeContract: vi.fn() },
     } as any;
 
-    await expect(approveUsdcOnArc(signer, 1n)).rejects.toThrow(
+    await expect(approveUsdcOnArc(signer, 1n, "testnet")).rejects.toThrow(
       "ArcSigner's walletClient must have an account attached",
     );
   });

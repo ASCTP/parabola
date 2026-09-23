@@ -38,4 +38,20 @@ describe("estimateFee", () => {
     expect(estimate.transferMode).toBe("fast");
     expect(estimate.protocolFee).toBe("0.1");
   });
+
+  it("defaults to mainnet, quoting fees against the production Iris API", async () => {
+    fetchFastTransferFeeBps.mockResolvedValue(10);
+
+    await estimateFee({ from: "arc", to: "stellar", amount: "100", speed: "fast" });
+
+    expect(fetchFastTransferFeeBps).toHaveBeenCalledWith(26, 27, false);
+  });
+
+  it("quotes against the sandbox Iris API when network is testnet", async () => {
+    fetchFastTransferFeeBps.mockResolvedValue(10);
+
+    await estimateFee({ from: "arc", to: "stellar", amount: "100", speed: "fast", network: "testnet" });
+
+    expect(fetchFastTransferFeeBps).toHaveBeenCalledWith(26, 27, true);
+  });
 });
