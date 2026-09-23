@@ -16,10 +16,15 @@
 import { createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { Keypair } from "@stellar/stellar-sdk";
-import { transfer, arcTestnetChain } from "../dist/index.js";
+import { transfer, arcMainnetChain, arcTestnetChain } from "../dist/index.js";
 
 const ARC_PRIVATE_KEY = process.env.ARC_PRIVATE_KEY;
 const STELLAR_SECRET_KEY = process.env.STELLAR_SECRET_KEY;
+
+// Defaults to testnet. Set NETWORK=mainnet to smoke against mainnet, which
+// moves real USDC and spends real Arc gas on every case below.
+const NETWORK = process.env.NETWORK === "mainnet" ? "mainnet" : "testnet";
+const STELLAR_RPC_URL = process.env.STELLAR_RPC_URL;
 
 if (!ARC_PRIVATE_KEY || !STELLAR_SECRET_KEY) {
   console.error(
@@ -31,9 +36,10 @@ if (!ARC_PRIVATE_KEY || !STELLAR_SECRET_KEY) {
   process.exit(1);
 }
 
+const arcChain = NETWORK === "mainnet" ? arcMainnetChain : arcTestnetChain;
 const arcAccount = privateKeyToAccount(ARC_PRIVATE_KEY);
 const arcSigner = {
-  walletClient: createWalletClient({ account: arcAccount, chain: arcTestnetChain, transport: http() }),
+  walletClient: createWalletClient({ account: arcAccount, chain: arcChain, transport: http() }),
 };
 
 const stellarKeypair = Keypair.fromSecret(STELLAR_SECRET_KEY);
@@ -41,6 +47,11 @@ const stellarSigner = { publicKey: stellarKeypair.publicKey(), keypair: stellarK
 
 const SMOKE_AMOUNT = "1.00";
 let failures = 0;
+
+console.log(`Running smoke cases against ${NETWORK}.`);
+if (NETWORK === "mainnet") {
+  console.log("WARNING: mainnet moves real USDC and spends real Arc gas.");
+}
 
 async function runCase(name, params) {
   console.log(`\n--- ${name} ---`);
@@ -69,7 +80,8 @@ await runCase("arc -> stellar (standard)", {
   recipient: stellarKeypair.publicKey(),
   speed: "standard",
   signer: arcSigner,
-  options: { destinationSigner: stellarSigner },
+  network: NETWORK,
+  options: { destinationSigner: stellarSigner, stellarRpcUrl: STELLAR_RPC_URL },
 });
 
 await runCase("stellar -> arc (standard)", {
@@ -79,7 +91,8 @@ await runCase("stellar -> arc (standard)", {
   recipient: arcAccount.address,
   speed: "standard",
   signer: stellarSigner,
-  options: { destinationSigner: arcSigner },
+  network: NETWORK,
+  options: { destinationSigner: arcSigner, stellarRpcUrl: STELLAR_RPC_URL },
 });
 
 if (failures > 0) {
