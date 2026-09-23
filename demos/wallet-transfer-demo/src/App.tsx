@@ -1,8 +1,10 @@
 import { useState } from "react";
-import type { TransferParams, CompleteMintParams, Signer } from "@asctp/parabola";
+import type { TransferParams, CompleteMintParams, Signer, Network } from "@asctp/parabola";
+import { DEFAULT_NETWORK } from "./lib/network.js";
 import { useArcWallet } from "./hooks/useArcWallet.js";
 import { useStellarWallet } from "./hooks/useStellarWallet.js";
 import { useTransfer } from "./hooks/useTransfer.js";
+import { NetworkBanner } from "./components/NetworkBanner.js";
 import { ArcWalletConnect } from "./components/ArcWalletConnect.js";
 import { StellarWalletConnect } from "./components/StellarWalletConnect.js";
 import { TransferForm, type TransferFormState } from "./components/TransferForm.js";
@@ -20,7 +22,8 @@ const initialForm: TransferFormState = {
 };
 
 export function App() {
-  const arcWallet = useArcWallet();
+  const [network, setNetwork] = useState<Network>(DEFAULT_NETWORK);
+  const arcWallet = useArcWallet(network);
   const stellarWallet = useStellarWallet();
   const {
     status,
@@ -37,6 +40,17 @@ export function App() {
   } = useTransfer();
 
   const [form, setForm] = useState<TransferFormState>(initialForm);
+
+  // An Arc signer is a viem WalletClient bound to one chain, so switching networks while a
+  // wallet is connected would leave a signer pointed at the wrong chain. Drop both and clear
+  // any in-flight result so the user reconnects on the network they just chose.
+  function handleNetworkChange(next: Network) {
+    if (next === network) return;
+    arcWallet.disconnect();
+    stellarWallet.disconnect();
+    reset();
+    setNetwork(next);
+  }
 
   function signerFor(chain: "arc" | "stellar"): Signer | null {
     return chain === "arc" ? arcWallet.signer : stellarWallet.signer;
@@ -55,6 +69,7 @@ export function App() {
       recipient: form.recipient,
       speed: form.speed,
       signer,
+      network,
       options: destinationSigner ? { destinationSigner } : undefined,
     };
 
@@ -71,6 +86,7 @@ export function App() {
       to: form.to,
       burnTxHash: result.burnTxHash,
       signer: destinationSigner,
+      network,
     };
 
     await finishPending(params);
@@ -86,6 +102,7 @@ export function App() {
       to: form.to,
       burnTxHash: recoverableBurnTxHash,
       signer: destinationSigner,
+      network,
     };
 
     await finishPending(params);
@@ -97,13 +114,19 @@ export function App() {
         <h1>Parabola wallet transfer demo</h1>
         <p className="subtitle">
           Connect your own wallets and trigger a real, non-custodial USDC transfer between Arc
-          and Stellar testnet. See{" "}
+          and Stellar. See{" "}
           <a href="https://github.com/ASCTP/parabola/blob/main/INTEGRATION.md" target="_blank" rel="noreferrer">
             INTEGRATION.md
           </a>{" "}
           for the patterns this app illustrates.
         </p>
       </header>
+
+      <NetworkBanner
+        network={network}
+        onChange={handleNetworkChange}
+        disabled={status === "submitting"}
+      />
 
       <section className="wallets">
         <ArcWalletConnect wallet={arcWallet} />
@@ -124,6 +147,7 @@ export function App() {
           to={form.to}
           amount={form.amount}
           speed={form.speed}
+          network={network}
           feeEstimate={feeEstimate}
           estimating={estimating}
           onEstimate={estimate}

@@ -1,5 +1,5 @@
 import { isConnected, requestAccess, getAddress, signTransaction as freighterSignTransaction } from "@stellar/freighter-api";
-import { STELLAR_TESTNET, type StellarSigner } from "@asctp/parabola";
+import type { StellarSigner } from "@asctp/parabola";
 
 /**
  * Connects to the Freighter browser extension and returns a StellarSigner whose
@@ -41,8 +41,6 @@ export async function connectStellarWallet(): Promise<{ signer: StellarSigner; a
 
   return { signer, address };
 }
-
-export const stellarNetworkPassphrase = STELLAR_TESTNET.networkPassphrase;
 
 /**
  * Freighter exposes no disconnect or account-change event, unlike MetaMask's

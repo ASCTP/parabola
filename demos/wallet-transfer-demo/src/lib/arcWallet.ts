@@ -1,14 +1,17 @@
 import { createWalletClient, custom, type Address, type WalletClient } from "viem";
-import { arcTestnetChain, ARC_TESTNET, type ArcSigner } from "@asctp/parabola";
+import type { ArcSigner, Network } from "@asctp/parabola";
+import { arcChainFor, arcNetworkConfig } from "./network.js";
 
 /**
  * Connects to an injected EVM wallet (e.g. MetaMask) via window.ethereum, switches it to
- * Arc testnet (adding the network if the wallet doesn't know it yet), and returns a viem
- * WalletClient wrapped as an ArcSigner. This is the whole of what ArcSigner needs: it's a
- * plain viem WalletClient, so any wallet/connector that can produce one works, not just
- * this pattern.
+ * the requested Arc network (adding the network if the wallet doesn't know it yet), and
+ * returns a viem WalletClient wrapped as an ArcSigner. This is the whole of what ArcSigner
+ * needs: it's a plain viem WalletClient, so any wallet/connector that can produce one works,
+ * not just this pattern.
  */
-export async function connectArcWallet(): Promise<{ signer: ArcSigner; address: Address }> {
+export async function connectArcWallet(
+  network: Network,
+): Promise<{ signer: ArcSigner; address: Address }> {
   if (!window.ethereum) {
     throw new Error("No EVM wallet found. Install MetaMask (or another injected wallet) to continue.");
   }
@@ -20,19 +23,24 @@ export async function connectArcWallet(): Promise<{ signer: ArcSigner; address: 
     throw new Error("No account returned by the wallet.");
   }
 
-  await ensureArcChain(provider);
+  await ensureArcChain(provider, network);
 
   const walletClient: WalletClient = createWalletClient({
     account: address as Address,
-    chain: arcTestnetChain,
+    chain: arcChainFor(network),
     transport: custom(provider),
   });
 
   return { signer: { walletClient }, address: address as Address };
 }
 
-async function ensureArcChain(provider: NonNullable<Window["ethereum"]>): Promise<void> {
-  const targetChainIdHex = `0x${ARC_TESTNET.chainId.toString(16)}`;
+async function ensureArcChain(
+  provider: NonNullable<Window["ethereum"]>,
+  network: Network,
+): Promise<void> {
+  const arcChain = arcChainFor(network);
+  const arcConfig = arcNetworkConfig(network);
+  const targetChainIdHex = `0x${arcConfig.chainId.toString(16)}`;
   const currentChainIdHex = (await provider.request({ method: "eth_chainId" })) as string;
 
   if (currentChainIdHex.toLowerCase() === targetChainIdHex.toLowerCase()) {
@@ -55,10 +63,10 @@ async function ensureArcChain(provider: NonNullable<Window["ethereum"]>): Promis
       params: [
         {
           chainId: targetChainIdHex,
-          chainName: arcTestnetChain.name,
-          nativeCurrency: arcTestnetChain.nativeCurrency,
-          rpcUrls: [ARC_TESTNET.rpcUrl],
-          blockExplorerUrls: [ARC_TESTNET.explorerUrl],
+          chainName: arcChain.name,
+          nativeCurrency: arcChain.nativeCurrency,
+          rpcUrls: [arcConfig.rpcUrl],
+          blockExplorerUrls: [arcConfig.explorerUrl],
         },
       ],
     });

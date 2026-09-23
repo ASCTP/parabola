@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Address } from "viem";
-import type { ArcSigner } from "@asctp/parabola";
+import type { ArcSigner, Network } from "@asctp/parabola";
 import { connectArcWallet } from "../lib/arcWallet.js";
 
 export type WalletStatus = "idle" | "connecting" | "connected" | "error";
 
-export function useArcWallet() {
+export function useArcWallet(network: Network) {
   const [status, setStatus] = useState<WalletStatus>("idle");
   const [signer, setSigner] = useState<ArcSigner | null>(null);
   const [address, setAddress] = useState<Address | null>(null);
@@ -15,7 +15,7 @@ export function useArcWallet() {
     setStatus("connecting");
     setError(null);
     try {
-      const result = await connectArcWallet();
+      const result = await connectArcWallet(network);
       setSigner(result.signer);
       setAddress(result.address);
       setStatus("connected");
@@ -23,7 +23,7 @@ export function useArcWallet() {
       setStatus("error");
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, []);
+  }, [network]);
 
   const disconnect = useCallback(() => {
     setSigner(null);

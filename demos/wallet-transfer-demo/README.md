@@ -16,7 +16,19 @@ two integration patterns this app illustrates (this one, plus the backend-held-k
 
 - [MetaMask](https://metamask.io) (or another injected EVM wallet) browser extension
 - [Freighter](https://freighter.app) browser extension
-- Funded Arc testnet and Stellar testnet accounts, get both via [faucet.circle.com](https://faucet.circle.com)
+- Funded Arc and Stellar accounts. On testnet, get both via [faucet.circle.com](https://faucet.circle.com)
+
+## Choosing a network
+
+The app has a network selector at the top with two options: testnet and mainnet. Mainnet moves real USDC and spends real Arc gas on every transfer, so the banner turns red and says so; testnet uses faucet funds and moves no real money. Switching the selector disconnects both wallets, since an Arc signer is bound to one chain, and you reconnect on the network you chose.
+
+The selector's initial value comes from `VITE_NETWORK`. It defaults to testnet when unset, so a fresh local checkout never starts on mainnet. Deployed builds intended for mainnet set `VITE_NETWORK=mainnet`.
+
+```bash
+VITE_NETWORK=mainnet   # deployed mainnet build; omit for a testnet-first local run
+```
+
+Point Freighter and MetaMask at the same network you select here before connecting.
 
 ## Running it
 
@@ -30,8 +42,8 @@ pnpm build       # builds @asctp/parabola's dist/, required before the demo will
 pnpm dev:wallet-transfer-demo     # starts this app
 ```
 
-Then open the printed local URL, connect both wallets, and try a transfer. Use small amounts:
-this runs against live testnet, not a simulator.
+Then open the printed local URL, pick a network, connect both wallets, and try a transfer. Use
+small amounts, and remember that mainnet moves real funds.
 
 ## What it demonstrates
 
