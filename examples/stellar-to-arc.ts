@@ -1,17 +1,32 @@
 /**
- * Transfers 25 USDC from a Stellar testnet account to an Arc testnet address.
+ * Transfers USDC from a Stellar account to an Arc address.
  *
- * Requires two funded testnet accounts (get USDC + gas from https://faucet.circle.com):
- *   STELLAR_SECRET_KEY  - Stellar secret key (S...) funded with testnet USDC + XLM
+ * Network defaults to mainnet, which moves real USDC and spends real gas.
+ * Set NETWORK=testnet to run against testnet with faucet funds instead
+ * (get testnet USDC + gas from https://faucet.circle.com).
+ *
+ *   STELLAR_SECRET_KEY  - Stellar secret key (S...) funded with USDC + XLM
  *   ARC_PRIVATE_KEY     - EVM private key funded with gas on Arc, used only to
  *                         pay for submitting the destination `receiveMessage` call
+ *   NETWORK             - "mainnet" (default) or "testnet"
+ *   STELLAR_RPC_URL     - optional Soroban RPC override (recommended on mainnet)
  */
 import { createWalletClient, http, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { Keypair } from "@stellar/stellar-sdk";
-import { transfer, arcTestnetChain, type ArcSigner, type StellarSigner } from "@asctp/parabola";
+import {
+  transfer,
+  arcMainnetChain,
+  arcTestnetChain,
+  type Network,
+  type ArcSigner,
+  type StellarSigner,
+} from "@asctp/parabola";
 
 async function main() {
+  const network: Network = process.env.NETWORK === "testnet" ? "testnet" : "mainnet";
+  const arcChain = network === "mainnet" ? arcMainnetChain : arcTestnetChain;
+
   const stellarKeypair = Keypair.fromSecret(process.env.STELLAR_SECRET_KEY!);
   const stellarSigner: StellarSigner = {
     publicKey: stellarKeypair.publicKey(),
@@ -22,7 +37,7 @@ async function main() {
   const destinationSigner: ArcSigner = {
     walletClient: createWalletClient({
       account: arcAccount,
-      chain: arcTestnetChain,
+      chain: arcChain,
       transport: http(),
     }),
   };
@@ -37,8 +52,10 @@ async function main() {
     recipient,
     speed: "standard",
     signer: stellarSigner,
+    network,
     options: {
       destinationSigner,
+      stellarRpcUrl: process.env.STELLAR_RPC_URL,
     },
   });
 
