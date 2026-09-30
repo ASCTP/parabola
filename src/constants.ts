@@ -80,16 +80,17 @@ export const DEFAULT_POLL_INTERVAL_MS = 3000;
 export const DEFAULT_POLL_TIMEOUT_MS = 300_000;
 
 // A Stellar transaction's time bound is fixed at build time, before prepareTransaction's
-// RPC round trip and before signTransaction, which for an extension wallet like
-// Freighter means waiting on a human to review and approve a popup. 60s (Stellar SDK's
-// typical example value) is a machine-speed assumption; it expires (txTooLate) the moment
-// a real signer takes more than a few seconds, which is the common case, not the edge case.
+// RPC round trip and before signTransaction. Extension wallets such as Freighter add human
+// review time to signing, so a short bound can expire (txTooLate) while the signer is still
+// being approved. 180s accommodates interactive signers; the Stellar SDK's typical 60s
+// example value assumes machine-speed signing.
 export const STELLAR_TX_TIMEOUT_SECONDS = 180;
 
 // How long to wait for a submitted Stellar transaction's confirmation before giving up
-// (not the same as the tx's own validity window above). 60s proved too short in practice
-// on testnet RPC; a timeout here does not mean the transaction failed, only that we
-// stopped waiting to find out (see SubmissionTimeoutError in src/errors.ts).
+// (distinct from the tx's own validity window above). Short windows can elapse before a
+// slow or congested RPC returns confirmation; a timeout here does not indicate the
+// transaction failed, only that confirmation was not observed within the window (see
+// SubmissionTimeoutError in src/errors.ts).
 export const STELLAR_CONFIRMATION_TIMEOUT_MS = 120_000;
 
 // Inclusion fee, in stroops, set on a Soroban transaction before prepareTransaction,

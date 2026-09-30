@@ -84,7 +84,7 @@ export async function transfer(params: TransferParams): Promise<TransferResult> 
   });
 
   // Everything past this point runs after the source-chain burn has already happened.
-  // Any failure here (attestation timeout, a mint-step error) must not lose burnTxHash --
+  // Any failure here (attestation timeout, a mint-step error) must not lose burnTxHash;
   // the caller still needs it to recover via completeMint(), so it's rethrown attached to
   // a TransferError rather than left to vanish with a bare Error.
   let attestationHash: string | undefined;
@@ -223,7 +223,7 @@ async function assertStellarRecipientReady(
 
 /**
  * Runs the actual burn call (as opposed to the approve step before it). If confirmation
- * times out here, funds may genuinely have left the source chain. Unlike an approve
+ * times out here, funds may have left the source chain. Unlike an approve
  * timeout, this is the one point in burn() where losing the hash would mean losing the
  * only way to recover via completeMint(), so it's converted to a TransferError instead
  * of propagating as a bare SubmissionTimeoutError.

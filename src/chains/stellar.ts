@@ -78,10 +78,10 @@ async function pollTransactionStatus(server: rpc.Server, hash: string): Promise<
     }
     await new Promise((resolve) => setTimeout(resolve, 2000));
   }
-  // The transaction was genuinely broadcast (this hash came from a successful
-  // sendTransaction); confirmation just didn't come back in time. That's different
-  // from never having been submitted, so callers get a hash they can act on instead
-  // of a bare error that discards it.
+  // The transaction was broadcast (this hash came from a successful sendTransaction);
+  // confirmation did not arrive within the timeout. This differs from never having been
+  // submitted, so the hash is surfaced for callers to act on instead of being discarded
+  // in a bare error.
   throw new SubmissionTimeoutError(`Timed out waiting for Stellar transaction ${hash} to confirm`, hash);
 }
 
@@ -112,12 +112,11 @@ export async function approveUsdcOnStellar(
   const approveTxHash = await invokeContract(stellar.usdc, "approve", args, signer, network, rpcUrl);
 
   // The approve tx above is confirmed (SUCCESS) by this point, but a subsequent
-  // deposit_for_burn call's simulation has still been observed reading a stale
-  // allowance of 0 immediately afterward. That's RPC read-after-write lag between the
-  // ledger closing and it being queryable for simulation, not a logic bug in either
-  // call. Actively poll the real on-chain allowance until it reflects the approval
-  // (or give up with a clear error) rather than handing back control while the two
-  // calls' views of state can still disagree.
+  // deposit_for_burn simulation can still read a stale allowance of 0 immediately
+  // afterward. This is RPC read-after-write lag between the ledger closing and it
+  // becoming queryable for simulation. Poll the on-chain allowance until it reflects
+  // the approval (or fail with a clear error) before returning, so the two calls do not
+  // proceed on disagreeing views of state.
   await waitForAllowance(signer.publicKey, stellar.tokenMessengerMinter, amountRaw, network, rpcUrl);
 
   return approveTxHash;
@@ -135,12 +134,12 @@ export interface StellarRecipientStatus {
 const MISSING_TRUSTLINE_MESSAGE = "trustline entry is missing for account";
 
 /**
- * Checks whether a Stellar account can actually receive USDC: it must exist on-ledger
- * (accounts don't exist until minimally funded with XLM) and hold a trustline for the
- * USDC asset. Verified directly against live testnet: an unfunded account makes
- * server.getAccount() throw "Account not found", and a funded account with no USDC
- * trustline makes the balance() simulation fail with Error(Contract, #13) /
- * "trustline entry is missing for account", rather than succeeding with a balance of 0.
+ * Checks whether a Stellar account can receive USDC: it must exist on-ledger (accounts do
+ * not exist until minimally funded with XLM) and hold a trustline for the USDC asset. An
+ * unfunded account causes server.getAccount() to throw "Account not found"; a funded
+ * account without a USDC trustline causes the balance() simulation to fail with
+ * Error(Contract, #13) / "trustline entry is missing for account" rather than returning a
+ * zero balance.
  */
 export async function checkStellarRecipientReady(
   recipient: string,
@@ -260,14 +259,13 @@ export async function burnUsdcOnStellar(params: {
     nativeToScVal(params.minFinalityThreshold, { type: "u32" }),
   ];
 
-  // waitForAllowance() in approveUsdcOnStellar already confirmed the real on-chain
-  // state is caught up before this ever runs, but that confirmation and this call's own
-  // getAccount()/simulation can still land on different RPC nodes that haven't converged
-  // with each other yet. Observed two distinct symptoms of the same underlying lag: a
+  // waitForAllowance() in approveUsdcOnStellar confirms on-chain state is caught up before
+  // this runs, but that confirmation and this call's own getAccount()/simulation can land
+  // on different RPC nodes that have not converged yet. Two symptoms share this cause: a
   // stale allowance read ("not enough allowance"), and a stale account sequence number
-  // (txBadSeq) if the node serving this call's getAccount() hasn't seen the approve's
-  // sequence bump yet. Both retry the same way: invokeContract() re-fetches the account
-  // fresh on every call, so trying again gives it a chance to hit a caught-up node.
+  // (txBadSeq) when the node serving this call's getAccount() has not seen the approve's
+  // sequence bump. Both are handled by retrying: invokeContract() re-fetches the account on
+  // every call, so a retry can reach a caught-up node.
   return retryOnTransientRpcLag(() =>
     invokeContract(stellar.tokenMessengerMinter, "deposit_for_burn", args, params.signer, params.network, params.rpcUrl),
   );

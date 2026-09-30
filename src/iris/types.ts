@@ -24,6 +24,6 @@ export interface IrisFeeEntry {
   minimumFee: number; // basis points
 }
 
-// Iris's fees endpoint (burn/USDC/fees/{src}/{dest}) returns a bare array, not an
-// object wrapping one. Verified directly against the live sandbox endpoint.
+// Iris's fees endpoint (burn/USDC/fees/{src}/{dest}) returns a bare array rather than an
+// object wrapping one.
 export type IrisFeesResponse = IrisFeeEntry[];
