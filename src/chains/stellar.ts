@@ -7,7 +7,7 @@ import {
   scValToNative,
   rpc,
 } from "@stellar/stellar-sdk";
-import { stellarConfig, STELLAR_TX_TIMEOUT_SECONDS, STELLAR_CONFIRMATION_TIMEOUT_MS } from "../constants.js";
+import { stellarConfig, STELLAR_TX_TIMEOUT_SECONDS, STELLAR_CONFIRMATION_TIMEOUT_MS, STELLAR_INCLUSION_FEE } from "../constants.js";
 import type { StellarSigner, Network } from "../types.js";
 import { SubmissionTimeoutError } from "../errors.js";
 
@@ -49,7 +49,7 @@ async function invokeContract(
   const contract = new Contract(contractId);
 
   const builtTx = new TransactionBuilder(account, {
-    fee: BASE_FEE,
+    fee: STELLAR_INCLUSION_FEE,
     networkPassphrase: stellarConfig(network).networkPassphrase,
   })
     .addOperation(contract.call(method, ...args))

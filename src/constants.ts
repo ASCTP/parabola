@@ -91,3 +91,11 @@ export const STELLAR_TX_TIMEOUT_SECONDS = 180;
 // on testnet RPC; a timeout here does not mean the transaction failed, only that we
 // stopped waiting to find out (see SubmissionTimeoutError in src/errors.ts).
 export const STELLAR_CONFIRMATION_TIMEOUT_MS = 120_000;
+
+// Inclusion fee, in stroops, set on a Soroban transaction before prepareTransaction,
+// which assembles the final fee as this value plus the simulation's minResourceFee.
+// BASE_FEE (100) leaves no headroom to absorb an increase in the resource fee between
+// simulation and submission, so a transaction built at BASE_FEE can be rejected with
+// txInsufficientFee. This is a per-transaction ceiling rather than a flat charge: the
+// network still only takes the resource fee plus the prevailing inclusion fee.
+export const STELLAR_INCLUSION_FEE = "1000000";
