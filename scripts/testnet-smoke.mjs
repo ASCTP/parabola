@@ -16,7 +16,7 @@
 import { createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { Keypair } from "@stellar/stellar-sdk";
-import { transfer, arcMainnetChain, arcTestnetChain } from "../dist/index.js";
+import { transfer, arcMainnetChain, arcTestnetChain, TransferError } from "../dist/index.js";
 
 const ARC_PRIVATE_KEY = process.env.ARC_PRIVATE_KEY;
 const STELLAR_SECRET_KEY = process.env.STELLAR_SECRET_KEY;
@@ -25,6 +25,16 @@ const STELLAR_SECRET_KEY = process.env.STELLAR_SECRET_KEY;
 // moves real USDC and spends real Arc gas on every case below.
 const NETWORK = process.env.NETWORK === "mainnet" ? "mainnet" : "testnet";
 const STELLAR_RPC_URL = process.env.STELLAR_RPC_URL;
+
+// Amount burned per case, in USDC. Override with SMOKE_AMOUNT to test with less
+// on mainnet (for example SMOKE_AMOUNT=0.10).
+const SMOKE_AMOUNT = process.env.SMOKE_AMOUNT ?? "1.00";
+
+// Which leg(s) to run, named by source chain. Set FROM=arc to run only arc -> stellar
+// or FROM=stellar to run only stellar -> arc (useful for a first mainnet run that
+// validates the full burn, attest, and mint path with one transfer before committing
+// the second). Anything else runs both.
+const FROM = process.env.FROM ?? "both";
 
 if (!ARC_PRIVATE_KEY || !STELLAR_SECRET_KEY) {
   console.error(
@@ -45,7 +55,6 @@ const arcSigner = {
 const stellarKeypair = Keypair.fromSecret(STELLAR_SECRET_KEY);
 const stellarSigner = { publicKey: stellarKeypair.publicKey(), keypair: stellarKeypair };
 
-const SMOKE_AMOUNT = "1.00";
 let failures = 0;
 
 console.log(`Running smoke cases against ${NETWORK}.`);
@@ -70,30 +79,60 @@ async function runCase(name, params) {
   } catch (error) {
     failures++;
     console.error(`FAIL ${name}:`, error instanceof Error ? error.message : error);
+
+    // A TransferError means the source-chain burn already succeeded and only a later
+    // step (attestation or mint) failed. The funds are recoverable: print the hashes
+    // and a ready-to-run completeMint() call so a stuck transfer can be finished by
+    // hand instead of the burnTxHash being lost with the error.
+    if (error instanceof TransferError) {
+      console.error(`  burnTxHash: ${error.burnTxHash}`);
+      if (error.attestationHash) {
+        console.error(`  attestationHash: ${error.attestationHash}`);
+      }
+      console.error(
+        "  Recover with completeMint(" +
+          JSON.stringify(
+            {
+              from: params.from,
+              to: params.to,
+              network: params.network,
+              burnTxHash: error.burnTxHash,
+              signer: "<destination-chain signer>",
+            },
+            null,
+            2,
+          ) +
+          ")",
+      );
+    }
   }
 }
 
-await runCase("arc -> stellar (standard)", {
-  from: "arc",
-  to: "stellar",
-  amount: SMOKE_AMOUNT,
-  recipient: stellarKeypair.publicKey(),
-  speed: "standard",
-  signer: arcSigner,
-  network: NETWORK,
-  options: { destinationSigner: stellarSigner, stellarRpcUrl: STELLAR_RPC_URL },
-});
+if (FROM === "arc" || FROM === "both") {
+  await runCase("arc -> stellar (standard)", {
+    from: "arc",
+    to: "stellar",
+    amount: SMOKE_AMOUNT,
+    recipient: stellarKeypair.publicKey(),
+    speed: "standard",
+    signer: arcSigner,
+    network: NETWORK,
+    options: { destinationSigner: stellarSigner, stellarRpcUrl: STELLAR_RPC_URL },
+  });
+}
 
-await runCase("stellar -> arc (standard)", {
-  from: "stellar",
-  to: "arc",
-  amount: SMOKE_AMOUNT,
-  recipient: arcAccount.address,
-  speed: "standard",
-  signer: stellarSigner,
-  network: NETWORK,
-  options: { destinationSigner: arcSigner, stellarRpcUrl: STELLAR_RPC_URL },
-});
+if (FROM === "stellar" || FROM === "both") {
+  await runCase("stellar -> arc (standard)", {
+    from: "stellar",
+    to: "arc",
+    amount: SMOKE_AMOUNT,
+    recipient: arcAccount.address,
+    speed: "standard",
+    signer: stellarSigner,
+    network: NETWORK,
+    options: { destinationSigner: arcSigner, stellarRpcUrl: STELLAR_RPC_URL },
+  });
+}
 
 if (failures > 0) {
   console.error(`\n${failures} smoke test case(s) failed.`);
