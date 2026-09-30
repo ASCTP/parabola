@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-30
+
+### Fixed
+
+- Soroban transactions were built with `BASE_FEE` (100 stroops) as the inclusion fee, leaving no headroom for the resource fee to rise between simulation and submission. A mainnet `mint_and_forward` was rejected with `txInsufficientFee`. The inclusion fee is now `STELLAR_INCLUSION_FEE` (1000000 stroops), a per-transaction ceiling the network does not fully charge (it still takes only the resource fee plus the prevailing inclusion fee).
+
 ## [0.3.0] - 2026-09-23
 
 ### Added
