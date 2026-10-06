@@ -9,6 +9,8 @@ import type {
   Network,
   CompleteMintParams,
   CompleteMintResult,
+  ResolveBurnParams,
+  ResolvedBurn,
 } from "./types.js";
 import {
   ARC_DOMAIN,
@@ -19,10 +21,11 @@ import {
   DEFAULT_POLL_INTERVAL_MS,
   DEFAULT_POLL_TIMEOUT_MS,
 } from "./constants.js";
-import { fetchFastTransferFeeBps, pollForAttestation } from "./iris/poll.js";
+import { fetchFastTransferFeeBps, pollForAttestation, getAttestation } from "./iris/poll.js";
 import { TransferError, SubmissionTimeoutError, AttestationNotReadyError } from "./errors.js";
 import { toRawAmount, fromRawAmount, decimalsForChain } from "./utils/amount.js";
 import { parseUsdcAmount, stellarAddressToBytes32, evmAddressToBytes32, encodeStellarForwardHook } from "./utils/encoding.js";
+import { decodeCctpMessage } from "./utils/message.js";
 import { approveUsdcOnArc, burnUsdcOnArc, burnUsdcOnArcWithStellarForward, receiveMessageOnArc } from "./chains/arc.js";
 import {
   approveUsdcOnStellar,
@@ -263,6 +266,40 @@ async function mint(args: {
     network,
     rpcUrl: stellarRpcUrl,
   });
+}
+
+/**
+ * Reads back what a burn has already committed to: the destination domain, the amount, and
+ * for a Stellar-bound burn the account the mint will actually pay.
+ *
+ * This matters most for a service completing someone else's transfer. The burn message is
+ * the only authoritative statement of where the minted USDC goes, and the forward hook
+ * inside it is the only place a Stellar recipient is recorded, so a caller that has not
+ * produced the burn itself has no other way to learn the destination.
+ *
+ * Resolves as soon as Iris has indexed the burn, which is before Circle signs it, so the
+ * message can be read while the attestation is still pending. `attestation` in the result
+ * is null in that case.
+ */
+export async function resolveBurn(params: ResolveBurnParams): Promise<ResolvedBurn> {
+  const network: Network = params.network ?? "mainnet";
+  const attestation = await getAttestation({
+    sourceDomain: domainFor(params.from),
+    transactionHash: params.burnTxHash,
+    useSandbox: network === "testnet",
+  });
+
+  if (!attestation.message) {
+    throw new AttestationNotReadyError(
+      `Iris has indexed burn ${params.burnTxHash} but returned no message for it`,
+      params.burnTxHash,
+    );
+  }
+
+  return {
+    ...decodeCctpMessage(attestation.message),
+    attestation: attestation.attestation,
+  };
 }
 
 /**

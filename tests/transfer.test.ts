@@ -10,6 +10,7 @@ const mintAndForwardOnStellar = vi.fn();
 const checkStellarRecipientReady = vi.fn();
 const fetchFastTransferFeeBps = vi.fn();
 const pollForAttestation = vi.fn();
+const getAttestation = vi.fn();
 
 vi.mock("../src/chains/arc.js", () => ({
   approveUsdcOnArc: (...args: unknown[]) => approveUsdcOnArc(...args),
@@ -28,12 +29,38 @@ vi.mock("../src/chains/stellar.js", () => ({
 vi.mock("../src/iris/poll.js", () => ({
   fetchFastTransferFeeBps: (...args: unknown[]) => fetchFastTransferFeeBps(...args),
   pollForAttestation: (...args: unknown[]) => pollForAttestation(...args),
+  getAttestation: (...args: unknown[]) => getAttestation(...args),
 }));
 
-const { transfer, completeMint } = await import("../src/transfer.js");
+const { transfer, completeMint, resolveBurn } = await import("../src/transfer.js");
 const { TransferError, SubmissionTimeoutError, AttestationNotReadyError } = await import(
   "../src/errors.js"
 );
+const { encodeStellarForwardHook } = await import("../src/utils/encoding.js");
+
+const FORWARD_RECIPIENT = "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2";
+
+/**
+ * Builds a CCTP V2 burn message with the offsets from Circle's MessageV2/BurnMessageV2
+ * reference contracts. Only the fields the SDK reads are populated; the rest are zero,
+ * which is what a real message carries for an unfilled fee and expiry.
+ */
+function buildBurnMessage(options: { forwardRecipient?: string } = {}): `0x${string}` {
+  const header = Buffer.alloc(148);
+  header.writeUInt32BE(1, 0);
+  header.writeUInt32BE(26, 4);
+  header.writeUInt32BE(27, 8);
+
+  const body = Buffer.alloc(228);
+  body.writeUInt32BE(1, 0);
+
+  const hook =
+    options.forwardRecipient === undefined
+      ? Buffer.alloc(0)
+      : Buffer.from(encodeStellarForwardHook(options.forwardRecipient).slice(2), "hex");
+
+  return `0x${Buffer.concat([header, body, hook]).toString("hex")}`;
+}
 
 const arcSigner = { walletClient: {} } as any;
 const stellarSigner = { publicKey: "GABCD" } as any;
@@ -47,7 +74,11 @@ beforeEach(() => {
   burnUsdcOnStellar.mockResolvedValue("stellarburnhash");
   checkStellarRecipientReady.mockResolvedValue({ exists: true, hasTrustline: true, ready: true });
   pollForAttestation.mockResolvedValue({
-    message: "0xmessage",
+    message: buildBurnMessage({ forwardRecipient: FORWARD_RECIPIENT }),
+    attestation: "0xattestation",
+  });
+  getAttestation.mockResolvedValue({
+    message: buildBurnMessage({ forwardRecipient: FORWARD_RECIPIENT }),
     attestation: "0xattestation",
   });
   receiveMessageOnArc.mockResolvedValue("0xminthash");
@@ -383,6 +414,45 @@ describe("attestation-not-ready reporting", () => {
         signer: stellarSigner,
       }),
     ).rejects.toBeInstanceOf(AttestationNotReadyError);
+  });
+});
+
+describe("resolveBurn", () => {
+  it("decodes the burn and reports the account the mint will pay", async () => {
+    const resolved = await resolveBurn({ from: "arc", burnTxHash: "0xburnhookhash" });
+
+    expect(resolved.sourceDomain).toBe(26);
+    expect(resolved.destinationDomain).toBe(27);
+    expect(resolved.forwardRecipient).toBe(FORWARD_RECIPIENT);
+  });
+
+  it("reads the burn with one request instead of polling the attestation window", async () => {
+    await resolveBurn({ from: "arc", burnTxHash: "0xburnhookhash" });
+
+    expect(getAttestation).toHaveBeenCalledTimes(1);
+    expect(pollForAttestation).not.toHaveBeenCalled();
+  });
+
+  it("routes a testnet burn to the sandbox Iris environment", async () => {
+    await resolveBurn({ from: "arc", burnTxHash: "0xburnhookhash", network: "testnet" });
+
+    expect(getAttestation).toHaveBeenCalledWith({
+      sourceDomain: 26,
+      transactionHash: "0xburnhookhash",
+      useSandbox: true,
+    });
+  });
+
+  it("still resolves the destination while the attestation is pending", async () => {
+    getAttestation.mockResolvedValueOnce({
+      message: buildBurnMessage({ forwardRecipient: FORWARD_RECIPIENT }),
+      attestation: null,
+    });
+
+    const resolved = await resolveBurn({ from: "arc", burnTxHash: "0xburnhookhash" });
+
+    expect(resolved.attestation).toBeNull();
+    expect(resolved.forwardRecipient).toBe(FORWARD_RECIPIENT);
   });
 });
 

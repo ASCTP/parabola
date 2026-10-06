@@ -31,15 +31,19 @@ export async function fetchFastTransferFeeBps(
 const IRIS_MAX_CONSECUTIVE_FAILURES = 5;
 
 type PollOutcome =
-  | { kind: "complete"; message: IrisMessage }
-  | { kind: "pending" }
+  | { kind: "message"; message: IrisMessage; complete: boolean }
+  | { kind: "not-indexed" }
   | { kind: "failure"; error: IrisRequestError };
 
 /**
  * Reads the current attestation state for one burn. Iris answers 404 until it has indexed a
  * burn, which is the expected state for the first polls of any new transfer, so a 404 is
- * reported as "keep waiting" rather than as an error. Everything else that is not a success
- * means the service is unreachable or unhealthy.
+ * reported as "not indexed yet" rather than as an error. Everything else that is not a
+ * success means the service is unreachable or unhealthy.
+ *
+ * A message that Iris has indexed but not yet attested is reported as a message with
+ * complete: false. Its bytes are already final, so a caller that only needs to know what
+ * the burn will do can read it before Circle has signed.
  */
 async function pollOnce(url: string, transactionHash: string): Promise<PollOutcome> {
   let res: Response;
@@ -56,7 +60,7 @@ async function pollOnce(url: string, transactionHash: string): Promise<PollOutco
   }
 
   if (res.status === 404) {
-    return { kind: "pending" };
+    return { kind: "not-indexed" };
   }
 
   if (!res.ok) {
@@ -71,10 +75,50 @@ async function pollOnce(url: string, transactionHash: string): Promise<PollOutco
 
   const body = (await res.json()) as IrisMessagesResponse;
   const message = body.messages[0];
-  if (message && message.status === "complete" && message.attestation) {
-    return { kind: "complete", message };
+  if (!message) {
+    return { kind: "not-indexed" };
   }
-  return { kind: "pending" };
+  return {
+    kind: "message",
+    message,
+    complete: message.status === "complete" && Boolean(message.attestation),
+  };
+}
+
+function attestationUrl(sourceDomain: number, transactionHash: string, useSandbox: boolean): string {
+  return `${irisBaseUrl(useSandbox)}messages/${sourceDomain}?transactionHash=${transactionHash}`;
+}
+
+/**
+ * Reads a burn's attestation state once, without waiting. Returns as soon as Iris has
+ * indexed the burn, which happens well before Circle signs it, so a caller that wants to
+ * inspect the burn or hand the wait off to a background job does not have to hold a request
+ * open for the whole attestation window.
+ *
+ * The returned message's `status` says whether the attestation itself is ready. Throws
+ * AttestationNotReadyError when Iris has not indexed the burn at all yet, which is a
+ * retryable state, and IrisRequestError when Iris is unreachable or unhealthy.
+ */
+export async function getAttestation(params: {
+  sourceDomain: number;
+  transactionHash: string;
+  useSandbox: boolean;
+}): Promise<IrisMessage> {
+  const outcome = await pollOnce(
+    attestationUrl(params.sourceDomain, params.transactionHash, params.useSandbox),
+    params.transactionHash,
+  );
+
+  if (outcome.kind === "message") {
+    return outcome.message;
+  }
+  if (outcome.kind === "failure") {
+    throw outcome.error;
+  }
+  throw new AttestationNotReadyError(
+    `Iris has not indexed burn ${params.transactionHash} yet`,
+    params.transactionHash,
+  );
 }
 
 /**
@@ -95,7 +139,7 @@ export async function pollForAttestation(params: {
 }): Promise<IrisMessage> {
   const pollInterval = params.pollInterval ?? DEFAULT_POLL_INTERVAL_MS;
   const pollTimeout = params.pollTimeout ?? DEFAULT_POLL_TIMEOUT_MS;
-  const url = `${irisBaseUrl(params.useSandbox)}messages/${params.sourceDomain}?transactionHash=${params.transactionHash}`;
+  const url = attestationUrl(params.sourceDomain, params.transactionHash, params.useSandbox);
 
   const deadline = Date.now() + pollTimeout;
   let consecutiveFailures = 0;
@@ -103,7 +147,7 @@ export async function pollForAttestation(params: {
   while (Date.now() < deadline) {
     const outcome = await pollOnce(url, params.transactionHash);
 
-    if (outcome.kind === "complete") {
+    if (outcome.kind === "message" && outcome.complete) {
       return outcome.message;
     }
 

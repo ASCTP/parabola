@@ -1,5 +1,8 @@
 import type { WalletClient } from "viem";
 import type { Keypair } from "@stellar/stellar-sdk";
+import type { CctpBurnMessage } from "./utils/message.js";
+
+export type { CctpBurnMessage };
 
 export type ChainId = "arc" | "stellar";
 /** Which deployment to transact against. Defaults to "mainnet" wherever it is accepted. */
@@ -106,4 +109,23 @@ export interface CompleteMintParams {
 export interface CompleteMintResult {
   mintTxHash: string;
   attestationHash: string;
+}
+
+export interface ResolveBurnParams {
+  /** The chain the burn happened on (the "from" of the original transfer). */
+  from: ChainId;
+  /** The burn transaction hash, whether this SDK produced it or not. */
+  burnTxHash: string;
+  /** Which deployment the burn happened on. Default "mainnet". */
+  network?: Network;
+}
+
+/**
+ * What a burn has already committed to, read back from Circle's attestation message. For a
+ * Stellar-bound burn, `forwardRecipient` is the account the mint will actually pay, which
+ * is the only way to know it without trusting a caller-supplied value.
+ */
+export interface ResolvedBurn extends CctpBurnMessage {
+  /** Circle's attestation for the burn, or null while it is still pending. */
+  attestation: string | null;
 }

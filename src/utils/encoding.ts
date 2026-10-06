@@ -55,6 +55,36 @@ export function encodeStellarForwardHook(recipientStrkey: string): `0x${string}`
 }
 
 /**
+ * Reads the Stellar recipient back out of a CctpForwarder hook payload, the inverse of
+ * encodeStellarForwardHook. Returns undefined when the payload cannot be read: too short
+ * for the header, an unrecognized hook version (whose layout is unknown), a length field
+ * that overruns the payload, or bytes that are not a valid Stellar strkey. Callers must
+ * treat undefined as "destination unknown" rather than as an empty recipient.
+ */
+export function decodeStellarForwardHook(hookData: string): string | undefined {
+  const hex = hookData.startsWith("0x") ? hookData.slice(2) : hookData;
+  if (hex.length % 2 !== 0 || !/^[0-9a-fA-F]*$/.test(hex)) {
+    return undefined;
+  }
+  const raw = Buffer.from(hex, "hex");
+  if (raw.length < 32) {
+    return undefined;
+  }
+  if (raw.readUInt32BE(24) !== 0) {
+    return undefined;
+  }
+  const length = raw.readUInt32BE(28);
+  if (length === 0 || raw.length < 32 + length) {
+    return undefined;
+  }
+  const strkey = raw.subarray(32, 32 + length).toString("utf8");
+  if (!StrKey.isValidEd25519PublicKey(strkey) && !StrKey.isValidContract(strkey)) {
+    return undefined;
+  }
+  return strkey;
+}
+
+/**
  * Converts a human-readable USDC amount string (e.g. "10.50") into raw subunits
  * for the given number of decimals, as a bigint. Avoids floating point error by
  * operating on the string directly.
