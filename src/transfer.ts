@@ -304,9 +304,15 @@ export async function resolveBurn(params: ResolveBurnParams): Promise<ResolvedBu
 
 /**
  * Completes a transfer that was left "pending" because transfer() was called
- * without options.destinationSigner. Re-polls Iris for the burn's attestation
- * (in case it wasn't available yet) and submits the destination-chain mint:
- * receiveMessage on Arc, or mint_and_forward on Stellar's CctpForwarder.
+ * without options.destinationSigner, or one whose burn was produced by another system
+ * entirely. Re-polls Iris for the burn's attestation (in case it wasn't available yet)
+ * and submits the destination-chain mint: receiveMessage on Arc, or mint_and_forward on
+ * Stellar's CctpForwarder.
+ *
+ * For a Stellar destination the mint pays whichever account the burn message's forward
+ * hook names, so that account is read out of the message and checked before anything is
+ * submitted. transfer() performs the same check up front; doing it here too means the
+ * guarantee holds for a caller that never ran transfer() at all.
  */
 export async function completeMint(params: CompleteMintParams): Promise<CompleteMintResult> {
   const network: Network = params.network ?? "mainnet";
@@ -327,6 +333,16 @@ export async function completeMint(params: CompleteMintParams): Promise<Complete
       `Iris returned no attestation for burn ${params.burnTxHash}`,
       params.burnTxHash,
     );
+  }
+
+  if (params.to === "stellar") {
+    const { forwardRecipient } = decodeCctpMessage(attestation.message);
+    if (!forwardRecipient) {
+      throw new Error(
+        `Burn ${params.burnTxHash} carries no readable Stellar forward recipient, so the account this mint would pay cannot be determined. Refusing to submit a mint to an unknown destination.`,
+      );
+    }
+    await assertStellarRecipientReady(forwardRecipient, network, params.stellarRpcUrl);
   }
 
   const mintTxHash = await mint({

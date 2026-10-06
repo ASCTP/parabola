@@ -417,6 +417,70 @@ describe("attestation-not-ready reporting", () => {
   });
 });
 
+describe("completeMint recipient guard", () => {
+  it("checks the recipient encoded in the burn rather than a caller-supplied value", async () => {
+    await completeMint({
+      from: "arc",
+      to: "stellar",
+      burnTxHash: "0xburnhookhash",
+      signer: stellarSigner,
+    });
+
+    expect(checkStellarRecipientReady).toHaveBeenCalledWith(FORWARD_RECIPIENT, "mainnet", undefined);
+    expect(mintAndForwardOnStellar).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses to submit a Stellar mint whose destination cannot be read from the burn", async () => {
+    pollForAttestation.mockResolvedValueOnce({
+      message: buildBurnMessage(),
+      attestation: "0xattestation",
+    });
+
+    await expect(
+      completeMint({
+        from: "arc",
+        to: "stellar",
+        burnTxHash: "0xburnhookhash",
+        signer: stellarSigner,
+      }),
+    ).rejects.toThrow(/no readable Stellar forward recipient/);
+
+    expect(checkStellarRecipientReady).not.toHaveBeenCalled();
+    expect(mintAndForwardOnStellar).not.toHaveBeenCalled();
+  });
+
+  it("refuses to submit when the decoded recipient cannot receive USDC", async () => {
+    checkStellarRecipientReady.mockResolvedValue({
+      exists: true,
+      hasTrustline: false,
+      ready: false,
+    });
+
+    await expect(
+      completeMint({
+        from: "arc",
+        to: "stellar",
+        burnTxHash: "0xburnhookhash",
+        signer: stellarSigner,
+      }),
+    ).rejects.toThrow(/no USDC trustline/);
+
+    expect(mintAndForwardOnStellar).not.toHaveBeenCalled();
+  });
+
+  it("skips the Stellar check for an Arc destination, where it does not apply", async () => {
+    await completeMint({
+      from: "stellar",
+      to: "arc",
+      burnTxHash: "0xburnhash",
+      signer: arcSigner,
+    });
+
+    expect(checkStellarRecipientReady).not.toHaveBeenCalled();
+    expect(receiveMessageOnArc).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("resolveBurn", () => {
   it("decodes the burn and reports the account the mint will pay", async () => {
     const resolved = await resolveBurn({ from: "arc", burnTxHash: "0xburnhookhash" });
