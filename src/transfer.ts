@@ -20,7 +20,7 @@ import {
   DEFAULT_POLL_TIMEOUT_MS,
 } from "./constants.js";
 import { fetchFastTransferFeeBps, pollForAttestation } from "./iris/poll.js";
-import { TransferError, SubmissionTimeoutError } from "./errors.js";
+import { TransferError, SubmissionTimeoutError, AttestationNotReadyError } from "./errors.js";
 import { toRawAmount, fromRawAmount, decimalsForChain } from "./utils/amount.js";
 import { parseUsdcAmount, stellarAddressToBytes32, evmAddressToBytes32, encodeStellarForwardHook } from "./utils/encoding.js";
 import { approveUsdcOnArc, burnUsdcOnArc, burnUsdcOnArcWithStellarForward, receiveMessageOnArc } from "./chains/arc.js";
@@ -124,7 +124,11 @@ export async function transfer(params: TransferParams): Promise<TransferResult> 
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    throw new TransferError(message, burnTxHash, attestationHash);
+    // burnTxHash has to survive this wrap, but so does the distinction between "Circle has
+    // not attested it yet" and a real failure, since a caller retries one and gives up on
+    // the other. That distinction rides along as a code rather than only in the message.
+    const code = err instanceof AttestationNotReadyError ? "ATTESTATION_NOT_READY" : undefined;
+    throw new TransferError(message, burnTxHash, attestationHash, code);
   }
 }
 
@@ -282,7 +286,10 @@ export async function completeMint(params: CompleteMintParams): Promise<Complete
   });
 
   if (!attestation.message || !attestation.attestation) {
-    throw new Error(`Iris returned no attestation for burn ${params.burnTxHash}`);
+    throw new AttestationNotReadyError(
+      `Iris returned no attestation for burn ${params.burnTxHash}`,
+      params.burnTxHash,
+    );
   }
 
   const mintTxHash = await mint({

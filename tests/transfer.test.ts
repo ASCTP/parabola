@@ -31,7 +31,9 @@ vi.mock("../src/iris/poll.js", () => ({
 }));
 
 const { transfer, completeMint } = await import("../src/transfer.js");
-const { TransferError, SubmissionTimeoutError } = await import("../src/errors.js");
+const { TransferError, SubmissionTimeoutError, AttestationNotReadyError } = await import(
+  "../src/errors.js"
+);
 
 const arcSigner = { walletClient: {} } as any;
 const stellarSigner = { publicKey: "GABCD" } as any;
@@ -319,6 +321,68 @@ describe("transfer network selection", () => {
 
     expect(pollForAttestation.mock.calls[0]?.[0].useSandbox).toBe(false);
     expect(mintAndForwardOnStellar.mock.calls[0]?.[0].network).toBe("mainnet");
+  });
+});
+
+describe("attestation-not-ready reporting", () => {
+  const arcToStellar = {
+    from: "arc",
+    to: "stellar",
+    amount: "10",
+    recipient: "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI",
+    speed: "standard",
+    signer: arcSigner,
+  } as const;
+
+  it("stamps an attestation timeout with a code the caller can branch on", async () => {
+    pollForAttestation.mockRejectedValueOnce(
+      new AttestationNotReadyError("Timed out after 300000ms", "0xburnhookhash"),
+    );
+
+    const err = await transfer({ ...arcToStellar }).catch((e) => e);
+
+    expect(err).toBeInstanceOf(TransferError);
+    expect((err as InstanceType<typeof TransferError>).code).toBe("ATTESTATION_NOT_READY");
+    expect((err as InstanceType<typeof TransferError>).burnTxHash).toBe("0xburnhookhash");
+  });
+
+  it("leaves the code undefined for a failure that is not merely slow", async () => {
+    pollForAttestation.mockRejectedValueOnce(new Error("Iris attestation request failed with 503"));
+
+    const err = await transfer({ ...arcToStellar }).catch((e) => e);
+
+    expect(err).toBeInstanceOf(TransferError);
+    expect((err as InstanceType<typeof TransferError>).code).toBeUndefined();
+  });
+
+  it("throws AttestationNotReadyError from completeMint, unwrapped, when Iris has no attestation", async () => {
+    pollForAttestation.mockResolvedValueOnce({ message: null, attestation: null });
+
+    const err = await completeMint({
+      from: "arc",
+      to: "stellar",
+      burnTxHash: "0xburnhookhash",
+      signer: stellarSigner,
+    }).catch((e) => e);
+
+    expect(err).toBeInstanceOf(AttestationNotReadyError);
+    expect((err as InstanceType<typeof AttestationNotReadyError>).burnTxHash).toBe("0xburnhookhash");
+    expect(mintAndForwardOnStellar).not.toHaveBeenCalled();
+  });
+
+  it("propagates an attestation timeout from completeMint with the same type", async () => {
+    pollForAttestation.mockRejectedValueOnce(
+      new AttestationNotReadyError("Timed out after 300000ms", "0xburnhookhash"),
+    );
+
+    await expect(
+      completeMint({
+        from: "arc",
+        to: "stellar",
+        burnTxHash: "0xburnhookhash",
+        signer: stellarSigner,
+      }),
+    ).rejects.toBeInstanceOf(AttestationNotReadyError);
   });
 });
 

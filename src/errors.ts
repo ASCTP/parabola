@@ -7,12 +7,63 @@
 export class TransferError extends Error {
   readonly burnTxHash: string;
   readonly attestationHash?: string;
+  /**
+   * Machine-readable discriminator for the wrapped failure, set when the underlying error
+   * has a type a caller can act on. `"ATTESTATION_NOT_READY"` means the burn is real and
+   * the attestation simply has not arrived yet, so the caller should retry rather than
+   * treat the transfer as lost. Undefined for failures with no more specific classification.
+   */
+  readonly code?: TransferErrorCode;
 
-  constructor(message: string, burnTxHash: string, attestationHash?: string) {
+  constructor(
+    message: string,
+    burnTxHash: string,
+    attestationHash?: string,
+    code?: TransferErrorCode,
+  ) {
     super(message);
     this.name = "TransferError";
     this.burnTxHash = burnTxHash;
     this.attestationHash = attestationHash;
+    this.code = code;
+  }
+}
+
+export type TransferErrorCode = "ATTESTATION_NOT_READY";
+
+/**
+ * Thrown when a burn has been confirmed on the source chain but Circle has not attested it
+ * yet. This is a retryable state rather than a failure: the burn is real, the funds are
+ * safe, and the attestation normally arrives within minutes. A service needs to tell this
+ * apart from a genuine error because it answers a client with a retryable status in one
+ * case and a terminal one in the other, and matching on message text is not a stable
+ * contract.
+ *
+ * Carries burnTxHash so the caller can retry with completeMint() after a delay.
+ */
+export class AttestationNotReadyError extends Error {
+  readonly burnTxHash: string;
+
+  constructor(message: string, burnTxHash: string) {
+    super(message);
+    this.name = "AttestationNotReadyError";
+    this.burnTxHash = burnTxHash;
+  }
+}
+
+/**
+ * Thrown when Circle's Iris service returned a response that polling cannot recover from,
+ * such as a 5xx. Without this, a persistent Iris outage is indistinguishable from Circle
+ * being slow, and the caller only learns something is wrong when the poll window expires.
+ */
+export class IrisRequestError extends Error {
+  /** HTTP status, or undefined when the request failed before a response arrived. */
+  readonly status?: number;
+
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = "IrisRequestError";
+    this.status = status;
   }
 }
 
