@@ -29,6 +29,7 @@ export type {
   EstimateFeeParams,
   FeeEstimate,
   CompleteMintParams,
+  CompleteMintOptions,
   CompleteMintResult,
   ResolveBurnParams,
   ResolvedBurn,

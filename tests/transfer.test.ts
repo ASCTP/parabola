@@ -481,6 +481,73 @@ describe("completeMint recipient guard", () => {
   });
 });
 
+describe("completeMint options", () => {
+  it("threads options.stellarRpcUrl into the recipient check and the mint call", async () => {
+    await completeMint({
+      from: "arc",
+      to: "stellar",
+      burnTxHash: "0xburnhookhash",
+      signer: stellarSigner,
+      options: { stellarRpcUrl: "https://my-soroban.example/rpc" },
+    });
+
+    expect(checkStellarRecipientReady).toHaveBeenCalledWith(
+      FORWARD_RECIPIENT,
+      "mainnet",
+      "https://my-soroban.example/rpc",
+    );
+    expect(mintAndForwardOnStellar.mock.calls[0]?.[0].rpcUrl).toBe("https://my-soroban.example/rpc");
+  });
+
+  it("threads options.pollInterval and options.pollTimeout into attestation polling", async () => {
+    await completeMint({
+      from: "arc",
+      to: "stellar",
+      burnTxHash: "0xburnhookhash",
+      signer: stellarSigner,
+      options: { pollInterval: 500, pollTimeout: 60000 },
+    });
+
+    expect(pollForAttestation.mock.calls[0]?.[0]).toMatchObject({
+      pollInterval: 500,
+      pollTimeout: 60000,
+    });
+  });
+
+  it("still honours the top-level knobs for callers written against the older shape", async () => {
+    await completeMint({
+      from: "arc",
+      to: "stellar",
+      burnTxHash: "0xburnhookhash",
+      signer: stellarSigner,
+      pollInterval: 250,
+      pollTimeout: 30000,
+      stellarRpcUrl: "https://legacy-soroban.example/rpc",
+    });
+
+    expect(pollForAttestation.mock.calls[0]?.[0]).toMatchObject({
+      pollInterval: 250,
+      pollTimeout: 30000,
+    });
+    expect(mintAndForwardOnStellar.mock.calls[0]?.[0].rpcUrl).toBe("https://legacy-soroban.example/rpc");
+  });
+
+  it("prefers options when a caller passes both shapes", async () => {
+    await completeMint({
+      from: "arc",
+      to: "stellar",
+      burnTxHash: "0xburnhookhash",
+      signer: stellarSigner,
+      pollInterval: 250,
+      stellarRpcUrl: "https://legacy-soroban.example/rpc",
+      options: { pollInterval: 500, stellarRpcUrl: "https://my-soroban.example/rpc" },
+    });
+
+    expect(pollForAttestation.mock.calls[0]?.[0].pollInterval).toBe(500);
+    expect(mintAndForwardOnStellar.mock.calls[0]?.[0].rpcUrl).toBe("https://my-soroban.example/rpc");
+  });
+});
+
 describe("resolveBurn", () => {
   it("decodes the burn and reports the account the mint will pay", async () => {
     const resolved = await resolveBurn({ from: "arc", burnTxHash: "0xburnhookhash" });

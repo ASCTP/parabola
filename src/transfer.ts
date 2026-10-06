@@ -317,8 +317,12 @@ export async function resolveBurn(params: ResolveBurnParams): Promise<ResolvedBu
 export async function completeMint(params: CompleteMintParams): Promise<CompleteMintResult> {
   const network: Network = params.network ?? "mainnet";
   const useSandbox = network === "testnet";
-  const pollInterval = params.pollInterval ?? DEFAULT_POLL_INTERVAL_MS;
-  const pollTimeout = params.pollTimeout ?? DEFAULT_POLL_TIMEOUT_MS;
+  const options = params.options ?? {};
+  // The top-level knobs predate CompleteMintOptions. They still resolve, but options wins
+  // so a caller that passes both gets the documented precedence rather than an error.
+  const pollInterval = options.pollInterval ?? params.pollInterval ?? DEFAULT_POLL_INTERVAL_MS;
+  const pollTimeout = options.pollTimeout ?? params.pollTimeout ?? DEFAULT_POLL_TIMEOUT_MS;
+  const stellarRpcUrl = options.stellarRpcUrl ?? params.stellarRpcUrl;
 
   const attestation = await pollForAttestation({
     sourceDomain: domainFor(params.from),
@@ -342,7 +346,7 @@ export async function completeMint(params: CompleteMintParams): Promise<Complete
         `Burn ${params.burnTxHash} carries no readable Stellar forward recipient, so the account this mint would pay cannot be determined. Refusing to submit a mint to an unknown destination.`,
       );
     }
-    await assertStellarRecipientReady(forwardRecipient, network, params.stellarRpcUrl);
+    await assertStellarRecipientReady(forwardRecipient, network, stellarRpcUrl);
   }
 
   const mintTxHash = await mint({
@@ -351,7 +355,7 @@ export async function completeMint(params: CompleteMintParams): Promise<Complete
     attestation: attestation.attestation as `0x${string}`,
     signer: params.signer,
     network,
-    stellarRpcUrl: params.stellarRpcUrl,
+    stellarRpcUrl,
   });
 
   return { mintTxHash, attestationHash: attestation.attestation };

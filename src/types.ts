@@ -89,6 +89,22 @@ export interface FeeEstimate {
   transferMode: TransferMode;
 }
 
+/**
+ * Knobs for the completion step. Mirrors TransferOptions where the two overlap, so a
+ * caller that already holds a TransferOptions-shaped object can reuse it.
+ */
+export interface CompleteMintOptions {
+  /** Milliseconds between Iris attestation polls. Default 3000. */
+  pollInterval?: number;
+  /** Milliseconds before polling gives up. Default 300000. */
+  pollTimeout?: number;
+  /**
+   * Overrides the Stellar Soroban RPC URL. The mainnet default endpoint is
+   * rate-limited; supply your own provider for real usage. No effect on Arc.
+   */
+  stellarRpcUrl?: string;
+}
+
 export interface CompleteMintParams {
   /** The destination chain of the original transfer (the "to" you passed to transfer()). */
   to: ChainId;
@@ -100,7 +116,11 @@ export interface CompleteMintParams {
   signer: Signer;
   /** Which deployment the original transfer ran on. Default "mainnet". */
   network?: Network;
+  /** Polling and RPC knobs. Preferred over the top-level equivalents below. */
+  options?: CompleteMintOptions;
+  /** Milliseconds between Iris attestation polls. Default 3000. */
   pollInterval?: number;
+  /** Milliseconds before polling gives up. Default 300000. */
   pollTimeout?: number;
   /** Overrides the Stellar Soroban RPC URL. No effect on Arc. */
   stellarRpcUrl?: string;
