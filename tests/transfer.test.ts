@@ -342,6 +342,50 @@ describe("transfer network selection", () => {
     expect(mintAndForwardOnStellar.mock.calls[0]?.[0].rpcUrl).toBe("https://my-soroban.example/rpc");
   });
 
+  it("threads an Arc RPC override into the approve and burn calls", async () => {
+    await transfer({
+      from: "arc",
+      to: "stellar",
+      amount: "10",
+      recipient: "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI",
+      speed: "standard",
+      signer: arcSigner,
+      options: { destinationSigner: stellarSigner, arcRpcUrl: "https://my-arc.example/rpc" },
+    });
+
+    expect(approveUsdcOnArc.mock.calls[0]?.[3]).toBe("https://my-arc.example/rpc");
+    expect(burnUsdcOnArcWithStellarForward.mock.calls[0]?.[0].rpcUrl).toBe(
+      "https://my-arc.example/rpc",
+    );
+  });
+
+  it("threads an Arc RPC override into receiveMessage on an Arc destination", async () => {
+    await completeMint({
+      from: "stellar",
+      to: "arc",
+      burnTxHash: "0xburnhash",
+      signer: arcSigner,
+      options: { arcRpcUrl: "https://my-arc.example/rpc" },
+    });
+
+    expect(receiveMessageOnArc.mock.calls[0]?.[0].rpcUrl).toBe("https://my-arc.example/rpc");
+  });
+
+  it("leaves the Arc RPC override undefined so the public endpoint is used by default", async () => {
+    await transfer({
+      from: "arc",
+      to: "stellar",
+      amount: "10",
+      recipient: "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI",
+      speed: "standard",
+      signer: arcSigner,
+      options: { destinationSigner: stellarSigner },
+    });
+
+    expect(approveUsdcOnArc.mock.calls[0]?.[3]).toBeUndefined();
+    expect(burnUsdcOnArcWithStellarForward.mock.calls[0]?.[0].rpcUrl).toBeUndefined();
+  });
+
   it("completeMint defaults to mainnet and polls the production Iris API", async () => {
     await completeMint({
       from: "arc",

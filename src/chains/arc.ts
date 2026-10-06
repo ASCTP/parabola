@@ -93,9 +93,14 @@ const erc20Abi = [
   },
 ] as const;
 
-function publicClient(network: Network) {
+/**
+ * Builds a read client for Arc. The explicit transport is what makes rpcUrl an override:
+ * viem prefers a supplied transport over the chain's rpcUrls.default, so a caller routing
+ * around the public endpoint gets it for the receipt waits too.
+ */
+function publicClient(network: Network, rpcUrl?: string) {
   const chain = chainFor(network);
-  return createPublicClient({ chain, transport: http(arcConfig(network).rpcUrl) });
+  return createPublicClient({ chain, transport: http(rpcUrl ?? arcConfig(network).rpcUrl) });
 }
 
 type WriteContractRequest = Omit<
@@ -103,7 +108,12 @@ type WriteContractRequest = Omit<
   "chain" | "account"
 >;
 
-async function writeAndWait(signer: ArcSigner, request: WriteContractRequest, network: Network) {
+async function writeAndWait(
+  signer: ArcSigner,
+  request: WriteContractRequest,
+  network: Network,
+  rpcUrl?: string,
+) {
   const account = signer.walletClient.account;
   if (!account) {
     throw new Error("ArcSigner's walletClient must have an account attached");
@@ -114,7 +124,7 @@ async function writeAndWait(signer: ArcSigner, request: WriteContractRequest, ne
     chain: chainFor(network),
   } as Parameters<ArcSigner["walletClient"]["writeContract"]>[0]);
   try {
-    await publicClient(network).waitForTransactionReceipt({ hash });
+    await publicClient(network, rpcUrl).waitForTransactionReceipt({ hash });
   } catch (err) {
     // The transaction was already broadcast (hash exists); a failure here means we
     // couldn't confirm it in time, not that it didn't happen. Surface the hash instead
@@ -130,6 +140,7 @@ export async function approveUsdcOnArc(
   signer: ArcSigner,
   amountRaw: bigint,
   network: Network,
+  rpcUrl?: string,
 ): Promise<Hex> {
   const arc = arcConfig(network);
   return writeAndWait(
@@ -141,6 +152,7 @@ export async function approveUsdcOnArc(
       args: [arc.tokenMessengerV2 as Hex, amountRaw],
     },
     network,
+    rpcUrl,
   );
 }
 
@@ -153,6 +165,8 @@ export async function burnUsdcOnArc(params: {
   minFinalityThreshold: number;
   signer: ArcSigner;
   network: Network;
+  /** Overrides the Arc RPC endpoint. Falls back to the network's public default. */
+  rpcUrl?: string;
 }): Promise<Hex> {
   const arc = arcConfig(params.network);
   return writeAndWait(
@@ -172,6 +186,7 @@ export async function burnUsdcOnArc(params: {
       ],
     },
     params.network,
+    params.rpcUrl,
   );
 }
 
@@ -189,6 +204,8 @@ export async function burnUsdcOnArcWithStellarForward(params: {
   hookData: Hex;
   signer: ArcSigner;
   network: Network;
+  /** Overrides the Arc RPC endpoint. Falls back to the network's public default. */
+  rpcUrl?: string;
 }): Promise<Hex> {
   const arc = arcConfig(params.network);
   return writeAndWait(
@@ -209,6 +226,7 @@ export async function burnUsdcOnArcWithStellarForward(params: {
       ],
     },
     params.network,
+    params.rpcUrl,
   );
 }
 
@@ -218,6 +236,8 @@ export async function receiveMessageOnArc(params: {
   attestation: Hex;
   signer: ArcSigner;
   network: Network;
+  /** Overrides the Arc RPC endpoint. Falls back to the network's public default. */
+  rpcUrl?: string;
 }): Promise<Hex> {
   const arc = arcConfig(params.network);
   return writeAndWait(
@@ -229,5 +249,6 @@ export async function receiveMessageOnArc(params: {
       args: [params.message, params.attestation],
     },
     params.network,
+    params.rpcUrl,
   );
 }

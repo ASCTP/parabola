@@ -46,6 +46,7 @@ export async function transfer(params: TransferParams): Promise<TransferResult> 
   const network: Network = params.network ?? "mainnet";
   const useSandbox = network === "testnet";
   const stellarRpcUrl = options.stellarRpcUrl;
+  const arcRpcUrl = options.arcRpcUrl;
   const pollInterval = options.pollInterval ?? DEFAULT_POLL_INTERVAL_MS;
   const pollTimeout = options.pollTimeout ?? DEFAULT_POLL_TIMEOUT_MS;
 
@@ -81,6 +82,7 @@ export async function transfer(params: TransferParams): Promise<TransferResult> 
     params,
     network,
     stellarRpcUrl,
+    arcRpcUrl,
     amountRaw,
     maxFeeRaw,
     minFinalityThreshold,
@@ -112,6 +114,7 @@ export async function transfer(params: TransferParams): Promise<TransferResult> 
         signer: options.destinationSigner,
         network,
         stellarRpcUrl,
+        arcRpcUrl,
       });
       status = "success";
     }
@@ -139,11 +142,13 @@ async function burn(args: {
   params: TransferParams;
   network: Network;
   stellarRpcUrl?: string;
+  arcRpcUrl?: string;
   amountRaw: bigint;
   maxFeeRaw: bigint;
   minFinalityThreshold: number;
 }): Promise<string> {
-  const { params, network, stellarRpcUrl, amountRaw, maxFeeRaw, minFinalityThreshold } = args;
+  const { params, network, stellarRpcUrl, arcRpcUrl, amountRaw, maxFeeRaw, minFinalityThreshold } =
+    args;
 
   if (params.from === "arc") {
     const signer = params.signer as ArcSigner;
@@ -156,7 +161,7 @@ async function burn(args: {
     // approved to spend at least amountRaw before depositForBurn(WithHook) will
     // succeed. Approving the exact amount per call avoids leaving a standing
     // allowance beyond what this transfer needs.
-    await approveUsdcOnArc(signer, amountRaw, network);
+    await approveUsdcOnArc(signer, amountRaw, network, arcRpcUrl);
     return runBurn(() => {
       if (params.to === "stellar") {
         const hookData = encodeStellarForwardHook(params.recipient);
@@ -170,6 +175,7 @@ async function burn(args: {
           hookData,
           signer,
           network,
+          rpcUrl: arcRpcUrl,
         });
       }
       const mintRecipientBytes32 = evmAddressToBytes32(params.recipient);
@@ -181,6 +187,7 @@ async function burn(args: {
         minFinalityThreshold,
         signer,
         network,
+        rpcUrl: arcRpcUrl,
       });
     });
   }
@@ -253,11 +260,18 @@ async function mint(args: {
   signer: Signer;
   network: Network;
   stellarRpcUrl?: string;
+  arcRpcUrl?: string;
 }): Promise<string> {
-  const { to, message, attestation, signer, network, stellarRpcUrl } = args;
+  const { to, message, attestation, signer, network, stellarRpcUrl, arcRpcUrl } = args;
 
   if (to === "arc") {
-    return receiveMessageOnArc({ message, attestation, signer: signer as ArcSigner, network });
+    return receiveMessageOnArc({
+      message,
+      attestation,
+      signer: signer as ArcSigner,
+      network,
+      rpcUrl: arcRpcUrl,
+    });
   }
   return mintAndForwardOnStellar({
     message,
@@ -323,6 +337,7 @@ export async function completeMint(params: CompleteMintParams): Promise<Complete
   const pollInterval = options.pollInterval ?? params.pollInterval ?? DEFAULT_POLL_INTERVAL_MS;
   const pollTimeout = options.pollTimeout ?? params.pollTimeout ?? DEFAULT_POLL_TIMEOUT_MS;
   const stellarRpcUrl = options.stellarRpcUrl ?? params.stellarRpcUrl;
+  const arcRpcUrl = options.arcRpcUrl ?? params.arcRpcUrl;
 
   const attestation = await pollForAttestation({
     sourceDomain: domainFor(params.from),
@@ -356,6 +371,7 @@ export async function completeMint(params: CompleteMintParams): Promise<Complete
     signer: params.signer,
     network,
     stellarRpcUrl,
+    arcRpcUrl,
   });
 
   return { mintTxHash, attestationHash: attestation.attestation };

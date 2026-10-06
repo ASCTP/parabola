@@ -40,6 +40,11 @@ export interface TransferOptions {
    */
   stellarRpcUrl?: string;
   /**
+   * Overrides the Arc RPC URL. Only used for reading receipts; the signer's own
+   * client broadcasts. No effect on Stellar.
+   */
+  arcRpcUrl?: string;
+  /**
    * Signer for the destination-chain completion call (receiveMessage on Arc,
    * mint_and_forward on Stellar). This is a separate signature from `signer`
    * because completing a CCTP transfer requires paying gas natively on the
@@ -103,6 +108,8 @@ export interface CompleteMintOptions {
    * rate-limited; supply your own provider for real usage. No effect on Arc.
    */
   stellarRpcUrl?: string;
+  /** Overrides the Arc RPC URL. No effect on Stellar. */
+  arcRpcUrl?: string;
 }
 
 export interface CompleteMintParams {
@@ -124,6 +131,8 @@ export interface CompleteMintParams {
   pollTimeout?: number;
   /** Overrides the Stellar Soroban RPC URL. No effect on Arc. */
   stellarRpcUrl?: string;
+  /** Overrides the Arc RPC URL. No effect on Stellar. */
+  arcRpcUrl?: string;
 }
 
 export interface CompleteMintResult {
