@@ -34,7 +34,7 @@ export type StellarSigner = { publicKey: string } & (
 
 export type Signer = ArcSigner | StellarSigner;
 
-export interface TransferOptions {
+export interface TransferOptionsBase {
   /** Max USDC fee tolerated for a fast transfer. Falls back to standard if the quoted fee exceeds this. */
   maxFee?: string;
   /** Max seconds to wait before falling back to standard transfer. */
@@ -53,28 +53,45 @@ export interface TransferOptions {
    * client broadcasts. No effect on Stellar.
    */
   arcRpcUrl?: string;
-  /**
-   * Signer for the destination-chain completion call (receiveMessage on Arc,
-   * mint_and_forward on Stellar). This is a separate signature from `signer`
-   * because completing a CCTP transfer requires paying gas natively on the
-   * destination chain, which the source-chain signer cannot do. Omit this to
-   * perform only the burn and attestation steps: the result comes back with
-   * status "pending" and an empty mintTxHash. Call completeMint() with
-   * burnTxHash and a destination-chain signer to finish it later (e.g. from a
-   * backend process holding the destination key).
-   */
-  destinationSigner?: Signer;
 }
 
 /**
- * Parameters for transfer(). The direction decides which signer is required: a transfer
- * burns on its source chain, so `signer` must be native to `from`. Naming a signer for
- * the wrong chain is a compile error rather than a runtime failure after the burn.
+ * Options for a transfer whose destination is Arc. `destinationSigner`, when present, is the
+ * Arc signer that submits receiveMessage.
+ */
+export interface ArcDestinationOptions extends TransferOptionsBase {
+  /**
+   * Signer for the destination-chain completion call, submit by receiveMessage on Arc. This is
+   * a separate signature from `signer` because completing a CCTP transfer requires paying gas
+   * natively on the destination chain, which the source-chain signer cannot do. Omit this to
+   * perform only the burn and attestation steps: the result comes back with status "pending"
+   * and an empty mintTxHash. Call completeMint() with burnTxHash and a destination-chain
+   * signer to finish it later (e.g. from a backend process holding the destination key).
+   */
+  destinationSigner?: ArcSigner;
+}
+
+/**
+ * Options for a transfer whose destination is Stellar. `destinationSigner`, when present, is
+ * the Stellar signer that submits mint_and_forward.
+ */
+export interface StellarDestinationOptions extends TransferOptionsBase {
+  /** Signer for the destination-chain completion call, submit by mint_and_forward on Stellar. */
+  destinationSigner?: StellarSigner;
+}
+
+export type TransferOptions = ArcDestinationOptions | StellarDestinationOptions;
+
+/**
+ * Parameters for transfer(). The direction decides which signers are required: a transfer
+ * burns on its source chain, so `signer` must be native to `from`, and it mints on its
+ * destination chain, so `options.destinationSigner` must be native to `to`. Naming a signer
+ * for the wrong chain is a compile error rather than a failure after the burn.
  */
 export type TransferParams = TransferParamsBase &
   (
-    | { from: "arc"; to: "stellar"; signer: ArcSigner }
-    | { from: "stellar"; to: "arc"; signer: StellarSigner }
+    | { from: "arc"; to: "stellar"; signer: ArcSigner; options?: StellarDestinationOptions }
+    | { from: "stellar"; to: "arc"; signer: StellarSigner; options?: ArcDestinationOptions }
   );
 
 interface TransferParamsBase {
@@ -83,7 +100,6 @@ interface TransferParamsBase {
   speed: TransferSpeed;
   /** Which deployment to transact against. Default "mainnet". */
   network?: Network;
-  options?: TransferOptions;
 }
 
 export interface TransferResult {

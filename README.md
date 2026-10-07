@@ -168,7 +168,7 @@ Along the way, Parabola also:
 
 ### Completing the mint: `destinationSigner` and `completeMint`
 
-`receiveMessage` and `mint_and_forward` are permissionless CCTP calls, but submitting them still costs gas natively on the destination chain, and Parabola never holds keys on your behalf. Pass `options.destinationSigner` with a signer for the *destination* chain to have Parabola submit that step automatically as part of the single `transfer()` call.
+`receiveMessage` and `mint_and_forward` are permissionless CCTP calls, but submitting them still costs gas natively on the destination chain, and Parabola never holds keys on your behalf. Pass `options.destinationSigner` with a signer for the *destination* chain to have Parabola submit that step automatically as part of the single `transfer()` call. The direction decides the type: an Arc-to-Stellar transfer takes a `StellarSigner` here and a Stellar-to-Arc transfer takes an `ArcSigner`, so naming the wrong chain fails to typecheck instead of failing after the burn.
 
 If you omit `destinationSigner` (for example, your backend only holds the source chain's key at call time), `transfer()` performs the burn and attestation polling and returns `status: "pending"` with `mintTxHash: ""`. Finish the transfer later, from wherever the destination key lives, with `completeMint()`:
 

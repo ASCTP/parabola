@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { TransferParams, CompleteMintParams, Signer, Network } from "@asctp/parabola";
+import type { TransferParams, CompleteMintParams, Network } from "@asctp/parabola";
 import { DEFAULT_NETWORK } from "./lib/network.js";
 import { useArcWallet } from "./hooks/useArcWallet.js";
 import { useStellarWallet } from "./hooks/useStellarWallet.js";
@@ -52,29 +52,41 @@ export function App() {
     setNetwork(next);
   }
 
-  function signerFor(chain: "arc" | "stellar"): Signer | null {
-    return chain === "arc" ? arcWallet.signer : stellarWallet.signer;
-  }
-
   // form.from and form.to are runtime values, so the direction has to be restated as a
-  // literal pair for the compiler to select the signer type the SDK requires. The form only
-  // ever holds the two supported directions, which flipDirection() preserves.
+  // literal pair for the compiler to select the signers the SDK requires: `signer` native to
+  // the source chain, and options.destinationSigner native to the destination chain. The form
+  // only ever holds the two supported directions, which flipDirection() preserves.
   function burnParams(): TransferParams | null {
     const shared = {
       amount: form.amount,
       recipient: form.recipient,
       speed: form.speed,
       network,
-      options: form.useDestinationSigner
-        ? { destinationSigner: signerFor(form.to) ?? undefined }
-        : undefined,
     };
+
     if (form.from === "arc") {
       const signer = arcWallet.signer;
-      return signer ? { ...shared, from: "arc", to: "stellar", signer } : null;
+      if (!signer) return null;
+      const destinationSigner = form.useDestinationSigner ? stellarWallet.signer : null;
+      return {
+        ...shared,
+        from: "arc",
+        to: "stellar",
+        signer,
+        options: destinationSigner ? { destinationSigner } : undefined,
+      };
     }
+
     const signer = stellarWallet.signer;
-    return signer ? { ...shared, from: "stellar", to: "arc", signer } : null;
+    if (!signer) return null;
+    const destinationSigner = form.useDestinationSigner ? arcWallet.signer : null;
+    return {
+      ...shared,
+      from: "stellar",
+      to: "arc",
+      signer,
+      options: destinationSigner ? { destinationSigner } : undefined,
+    };
   }
 
   // The mint runs on form.to, so that is the chain whose signer must be supplied.
@@ -85,6 +97,12 @@ export function App() {
     }
     const signer = stellarWallet.signer;
     return signer ? { from: "arc", to: "stellar", burnTxHash, signer, network } : null;
+  }
+
+  // The mint runs on form.to, so a connected wallet on that chain is what makes the
+  // completion step possible.
+  function destinationWalletConnected(): boolean {
+    return form.to === "arc" ? arcWallet.signer !== null : stellarWallet.signer !== null;
   }
 
   async function handleSubmit() {
@@ -161,7 +179,7 @@ export function App() {
           message={error}
           recoverableBurnTxHash={recoverableBurnTxHash}
           submissionUncertain={submissionUncertain}
-          destinationWalletConnected={signerFor(form.to) !== null}
+          destinationWalletConnected={destinationWalletConnected()}
           onRecover={handleRecoverMint}
           recovering={status === "submitting"}
           onDismiss={reset}
@@ -176,7 +194,7 @@ export function App() {
             to={form.to}
             onCompleteMint={handleCompleteMint}
             completing={status === "submitting"}
-            destinationWalletConnected={signerFor(form.to) !== null}
+            destinationWalletConnected={destinationWalletConnected()}
           />
         </section>
       )}

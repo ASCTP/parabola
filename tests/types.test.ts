@@ -90,6 +90,46 @@ describe("transfer direction and signer", () => {
   });
 });
 
+describe("transfer destination signer", () => {
+  it("accepts a destination signer native to the destination chain in both directions", () => {
+    const mintOnStellar = {
+      from: "arc",
+      to: "stellar",
+      amount: "10",
+      recipient: STELLAR_ACCOUNT,
+      speed: "standard",
+      signer: arcSigner,
+      options: { destinationSigner: keypairSigner },
+    } satisfies TransferParams;
+
+    const mintOnArc = {
+      from: "stellar",
+      to: "arc",
+      amount: "10",
+      recipient: EVM_ACCOUNT,
+      speed: "standard",
+      signer: keypairSigner,
+      options: { destinationSigner: arcSigner },
+    } satisfies TransferParams;
+
+    expect([mintOnStellar.to, mintOnArc.to]).toEqual(["stellar", "arc"]);
+  });
+
+  it("rejects an Arc destination signer for a Stellar mint", () => {
+    // @ts-expect-error the mint runs on Stellar, so destinationSigner must be a StellarSigner
+    const wrong: TransferParams = { from: "arc", to: "stellar", amount: "10", recipient: STELLAR_ACCOUNT, speed: "standard", signer: arcSigner, options: { destinationSigner: arcSigner } };
+
+    expect(wrong.to).toBe("stellar");
+  });
+
+  it("rejects a Stellar destination signer for an Arc mint", () => {
+    // @ts-expect-error the mint runs on Arc, so destinationSigner must be an ArcSigner
+    const wrong: TransferParams = { from: "stellar", to: "arc", amount: "10", recipient: EVM_ACCOUNT, speed: "standard", signer: keypairSigner, options: { destinationSigner: keypairSigner } };
+
+    expect(wrong.to).toBe("arc");
+  });
+});
+
 describe("completeMint direction and signer", () => {
   it("accepts a signer native to the destination chain in both directions", () => {
     const mintOnStellar = {
