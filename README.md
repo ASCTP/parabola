@@ -18,6 +18,14 @@ different data models.
 npm install @asctp/parabola
 ```
 
+Parabola declares `@stellar/stellar-sdk@^16.2.0` and `viem@^2.21.0` as dependencies. You only need to think about the Stellar one: constructing a `StellarSigner` from a `Keypair` means naming that type in your own code, so import it from Parabola rather than installing a second copy.
+
+```typescript
+import { Keypair } from "@asctp/parabola";
+```
+
+Two copies of `@stellar/stellar-sdk` at different versions produce structurally similar but distinct `Keypair` types. TypeScript will not reconcile them, and the mismatch surfaces only in the signing path at runtime.
+
 ## Choosing a network
 
 Every entry point (`transfer`, `estimateFee`, `completeMint`, `checkStellarRecipientReady`) accepts an optional `network` parameter: `"mainnet"` or `"testnet"`. It defaults to `"mainnet"`.
@@ -34,7 +42,9 @@ const result = await transfer({ /* ... */, network: "mainnet" });
 
 The network selects the contract addresses, RPC endpoints, and Circle Iris environment used internally. Both examples below pass `network: "mainnet"` explicitly; drop it and the behavior is identical.
 
-The Stellar Soroban RPC defaults to `https://mainnet.sorobanrpc.com` on mainnet and `https://soroban-testnet.stellar.org` on testnet. Override it per call with `options.stellarRpcUrl` (recommended on mainnet, where a dedicated or paid RPC is more reliable than the public default).
+The Stellar Soroban RPC defaults to `https://mainnet.sorobanrpc.com` on mainnet and `https://soroban-testnet.stellar.org` on testnet. Override it per call with `options.stellarRpcUrl` (recommended on mainnet, where a dedicated or paid RPC is more reliable than the public default). `options.arcRpcUrl` does the same for the Arc endpoint Parabola uses to read transaction receipts; it does not replace the signer's own transport, which is what broadcasts.
+
+If you are wiring this into a long-running service, default your own configuration to testnet and make mainnet an explicit opt-in, then reject any request whose `network` disagrees with it. The mainnet default is convenient for a script and is the wrong failure mode for a process holding a funded key.
 
 ## Arc to Stellar
 
@@ -153,7 +163,7 @@ Every transfer follows CCTP V2's burn-attest-mint flow:
 Along the way, Parabola also:
 
 - Translates Stellar `G...`/`C...` addresses into the 32-byte format CCTP messages require, and encodes the forward-recipient hook Stellar-bound transfers need.
-- Converts between Stellar USDC's 7-decimal precision and Arc USDC's 6-decimal precision, so you always work in human-readable amounts like `"10.50"`.
+- Converts between Stellar USDC's 7-decimal precision and Arc USDC's 6-decimal precision, so you always work in human-readable amounts like `"10.50"`. See [Amounts and decimals](#amounts-and-decimals).
 - Picks Standard or Fast transfer based on `speed`, quotes the Fast fee from Circle's fees endpoint first, and falls back to Standard automatically if the quoted fee exceeds `maxFee`.
 
 ### Completing the mint: `destinationSigner` and `completeMint`
@@ -173,9 +183,30 @@ const { mintTxHash, attestationHash } = await completeMint({
 });
 ```
 
+`completeMint` takes the same polling and RPC knobs as `transfer`, under `options`:
+
+```typescript
+await completeMint({
+  from: "arc",
+  to: "stellar",
+  burnTxHash,
+  signer: destinationSigner,
+  options: {
+    pollInterval: 3000,   // ms between Iris polls, default 3000
+    pollTimeout: 30_000,  // ms before polling gives up, default 300000
+    stellarRpcUrl: process.env.STELLAR_RPC_URL,
+    arcRpcUrl: process.env.ARC_RPC_URL,
+  },
+});
+```
+
+`pollInterval`, `pollTimeout`, `stellarRpcUrl` and `arcRpcUrl` are also accepted at the top level for compatibility with earlier releases. When both shapes are present, `options` wins.
+
 ## Checking a Stellar recipient before you transfer
 
 A Stellar account doesn't exist on-ledger until it's funded with the minimum XLM reserve, and it can't hold USDC until it also has a USDC trustline. When the destination of a transfer is Stellar, `transfer()` checks both automatically before submitting anything on the source chain, and throws a clear error up front if the recipient isn't ready instead of letting the burn go through and only failing later at the mint step, with the USDC then stuck at the `CctpForwarder` contract.
+
+`completeMint()` performs the same check before it submits, which matters when the burn came from somewhere other than your own `transfer()` call. It does not take the recipient as an argument. It reads the account the mint will actually pay out of the burn message's forward hook, so the check cannot disagree with the destination.
 
 You can also run this check yourself ahead of time, for example to validate a recipient address in a form before a user submits a transfer:
 
@@ -186,6 +217,94 @@ const status = await checkStellarRecipientReady("GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYP
 console.log(status);
 // { exists: true, hasTrustline: true, ready: true }
 ```
+
+## Amounts and decimals
+
+`amount`, `maxFee`, and the `fee` on a result are all decimal strings in whole USDC, for example `"10.50"`. Parabola scales them to the source chain's USDC precision internally: 6 decimals on Arc, 7 on Stellar. You never convert units yourself.
+
+Be careful with balances you read outside Parabola, because Arc reports the same USDC at two different scales. `arcMainnetChain.nativeCurrency.decimals` is 18, and `ARC_MAINNET.usdcDecimals` is 6, and these are not two balances in two tokens. Arc's native gas asset is USDC, and the ERC-20 contract at `ARC_MAINNET.usdc` is another view of it. A native balance of 18.99551755 USDC is the same amount as 18.995517 through the ERC-20 contract, the native figure truncated to six places. They move together when USDC is burned or received.
+
+That distinction matters most for a balance floor. A floor expressed in the wrong scale is off by a factor of 10^12, which either disables a transfer direction outright or lets it spend down to nothing without stopping.
+
+| What you are reading | Scale to use |
+| --- | --- |
+| Arc native balance (`eth_getBalance`, viem's `getBalance`) | `chain.nativeCurrency.decimals`, 18 on Arc |
+| Arc USDC ERC-20 (`balanceOf`) | `ARC_MAINNET.usdcDecimals`, 6 |
+| Stellar USDC balance | `STELLAR_MAINNET.usdcDecimals`, 7 |
+| `TransferParams.amount`, `maxFee`, `FeeEstimate.protocolFee` | Whole USDC, e.g. `"10.50"` |
+
+Prefer reading the scale off the chain object rather than hardcoding it. `decimalsForChain(chain)` resolves the USDC scale for either chain and is the same function `transfer()` uses to interpret `amount`.
+
+## Completing a burn you did not create
+
+`completeMint()` does not need the burn to have come from your own `transfer()` call, and it keeps no record of burns, so it does not check that it did. This is the shape a relayer needs: a caller hands you a `burnTxHash` for a burn produced elsewhere, and you submit the mint on the destination chain.
+
+Before spending anything, read back what the burn committed to:
+
+```typescript
+import { resolveBurn } from "@asctp/parabola";
+
+const burn = await resolveBurn({ from: "arc", burnTxHash });
+// burn.forwardRecipient is the Stellar account the mint will pay
+// burn.amountRaw is in the source chain's USDC subunits (10^6 on Arc)
+// burn.attestation is null while Circle is still signing
+```
+
+`resolveBurn` returns as soon as Iris has indexed the burn, which is before Circle has signed the attestation, so `attestation` being `null` while `forwardRecipient` is populated is the normal state during the first seconds after a burn. `resolveBurn` throws `AttestationNotReadyError` if Iris has not indexed the burn at all yet.
+
+For a service that must answer its own caller immediately, `getAttestation` performs a single non-blocking read instead of polling to a deadline. A 404 from Iris means the burn is not indexed yet, which is an ordinary early state rather than a failure.
+
+```typescript
+import { getAttestation, AttestationNotReadyError } from "@asctp/parabola";
+
+try {
+  const message = await getAttestation({ sourceDomain: 26, transactionHash: burnTxHash, useSandbox: false });
+  // message.status === "complete" once Circle has signed
+} catch (err) {
+  if (err instanceof AttestationNotReadyError) {
+    // not indexed yet: answer 409 and let the caller come back
+  }
+  throw err;
+}
+```
+
+### Idempotency is yours to enforce
+
+Parabola does not dedupe, and `completeMint()` will submit again for a burn that was already minted. The second submission is rejected on-chain, because CCTP refuses a re-used message, but you pay gas to learn that.
+
+Keep a ledger keyed on the burn hash and network, and return the recorded mint transaction hash for a repeat request instead of resubmitting. If you need to know whether a message was already received for a burn, check Circle's attestation plus the destination chain's own message state rather than calling `completeMint` again to find out.
+
+## Handling errors
+
+The distinction that matters most in a service is between a transfer that is merely slow and one that has failed, because those are opposite instructions to your own caller.
+
+| Error | Meaning | Usual response |
+| --- | --- | --- |
+| `AttestationNotReadyError` | Circle has not attested this burn yet. Retryable. | Retry later, typically `409` |
+| `TransferError` with `code === "ATTESTATION_NOT_READY"` | Same condition, wrapped by `transfer()`. Retryable. | Retry later, typically `409` |
+| `TransferError` without a code | A real failure after the burn, for example the mint step was rejected. | Stop, typically `502` |
+| `SubmissionTimeoutError` | A transaction was broadcast but not confirmed in time. `hash` names it. | Reconcile against the chain |
+| `IrisRequestError` | Circle's Iris API returned a non-OK response or the request failed. `status` holds the HTTP status when there was a response. | Treat as an upstream outage |
+
+`transfer()` burns on the source chain before it polls for an attestation, so a rejection does not mean nothing happened. Any failure after the burn is thrown as a `TransferError` carrying `burnTxHash`, so you always keep the hash you need to recover:
+
+```typescript
+import { transfer, TransferError } from "@asctp/parabola";
+
+try {
+  await transfer(params);
+} catch (err) {
+  if (err instanceof TransferError) {
+    if (err.code === "ATTESTATION_NOT_READY") {
+      // funds left the source chain and Circle is still signing: retryable
+    }
+    await ledger.record({ burnTxHash: err.burnTxHash, attestationHash: err.attestationHash });
+  }
+  throw err;
+}
+```
+
+A `404` from Iris is not an error. It means the burn has not been indexed yet, and `pollForAttestation` keeps polling through it. A persistent `5xx` is different: after five consecutive failures, polling stops with an `IrisRequestError` rather than running out the clock, so an Iris outage is distinguishable from a slow attestation instead of looking identical to one.
 
 ## Environment variables
 
@@ -208,6 +327,8 @@ Network configuration used internally:
 ## Known limitations
 
 - **`network` defaults to mainnet.** With `network` omitted, `transfer()` moves real USDC and spends real Arc gas. Pass `network: "testnet"` for development against faucet funds. See [Choosing a network](#choosing-a-network).
+- **`completeMint()` does not dedupe.** A second call for a burn that was already minted submits and is rejected on-chain, costing gas. Keep your own ledger keyed on the burn hash and network. See [Idempotency is yours to enforce](#idempotency-is-yours-to-enforce).
+- **The published tarball ships `dist/` only.** There is no `src/` in the package, so the documented surface is this README, `INTEGRATION.md`, and the type declarations. Questions the README does not answer have no second written source to fall back on.
 - **Stellar inbound transfers require `CctpForwarder`.** This is a protocol requirement, not a Parabola choice: Circle's CCTP does not support minting directly to a Stellar address, so every transfer landing on Stellar routes through `mint_and_forward`.
 - **No key custody.** Parabola never holds or transmits private keys. Completing a transfer's mint step on the destination chain requires a signer native to that chain (see `destinationSigner` above); Parabola cannot complete it for you without one.
 - **Stellar recipients need a USDC trustline first.** USDC on Stellar is a classic Stellar asset under the hood; any account receiving it for the first time must submit its own `changeTrust` operation before `mint_and_forward` can pay out to it, same as any other Stellar USDC transfer. Parabola cannot establish this on a recipient's behalf (it has no signing relationship with an arbitrary third-party recipient). If the recipient hasn't received USDC on Stellar before, they need to set up the trustline themselves first.
