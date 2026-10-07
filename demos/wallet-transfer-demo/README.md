@@ -20,13 +20,7 @@ two integration patterns this app illustrates (this one, plus the backend-held-k
 
 ## Choosing a network
 
-The app has a network selector at the top with two options: testnet and mainnet. Mainnet moves real USDC and spends real Arc gas on every transfer, so the banner turns red and says so; testnet uses faucet funds and moves no real money. Switching the selector disconnects both wallets, since an Arc signer is bound to one chain, and you reconnect on the network you chose.
-
-The selector's initial value comes from `VITE_NETWORK`. It defaults to testnet when unset, so a fresh local checkout never starts on mainnet. Deployed builds intended for mainnet set `VITE_NETWORK=mainnet`.
-
-```bash
-VITE_NETWORK=mainnet   # deployed mainnet build; omit for a testnet-first local run
-```
+The app opens on mainnet, the way a block explorer does, and a Mainnet / Testnet picker sits in the top right of the header. There is no build-time override, so a local run and the deployed build behave identically and the picker is the only source of truth. Mainnet moves real USDC and spends real Arc gas on every transfer, so the picker turns red while mainnet is selected; testnet uses faucet funds and moves no real money. Switching disconnects both wallets, since an Arc signer is bound to one chain, and you reconnect on the network you chose.
 
 Point Freighter and MetaMask at the same network you select here before connecting.
 

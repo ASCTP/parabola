@@ -4,7 +4,7 @@ import { DEFAULT_NETWORK } from "./lib/network.js";
 import { useArcWallet } from "./hooks/useArcWallet.js";
 import { useStellarWallet } from "./hooks/useStellarWallet.js";
 import { useTransfer } from "./hooks/useTransfer.js";
-import { NetworkBanner } from "./components/NetworkBanner.js";
+import { NetworkSelector } from "./components/NetworkSelector.js";
 import { ArcWalletConnect } from "./components/ArcWalletConnect.js";
 import { StellarWalletConnect } from "./components/StellarWalletConnect.js";
 import { TransferForm, type TransferFormState } from "./components/TransferForm.js";
@@ -131,7 +131,14 @@ export function App() {
   return (
     <div className="app">
       <header>
-        <h1>Parabola wallet transfer demo</h1>
+        <div className="header-row">
+          <h1>Parabola wallet transfer demo</h1>
+          <NetworkSelector
+            network={network}
+            onChange={handleNetworkChange}
+            disabled={status === "submitting"}
+          />
+        </div>
         <p className="subtitle">
           Connect your own wallets and trigger a real, non-custodial USDC transfer between Arc
           and Stellar. See{" "}
@@ -141,12 +148,6 @@ export function App() {
           for the patterns this app illustrates.
         </p>
       </header>
-
-      <NetworkBanner
-        network={network}
-        onChange={handleNetworkChange}
-        disabled={status === "submitting"}
-      />
 
       <section className="wallets">
         <ArcWalletConnect wallet={arcWallet} />

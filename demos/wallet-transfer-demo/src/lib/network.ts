@@ -10,12 +10,11 @@ import {
 
 export type { Network };
 
-// The demo's initial network. Deployed builds (for example the mainnet submission) set
-// VITE_NETWORK=mainnet; anything else, including an unset value during local development,
-// falls back to testnet so a fresh checkout never moves real funds by default. The user can
-// still switch at runtime from the UI before connecting a wallet.
-export const DEFAULT_NETWORK: Network =
-  import.meta.env.VITE_NETWORK === "mainnet" ? "mainnet" : "testnet";
+// The network the app opens on. Mainnet, following the convention every block explorer uses,
+// with the banner turning red and spelling out that transfers move real USDC. The switch in
+// the banner is the only thing that changes it, and there is no build-time override, so a
+// local checkout and the deployed build behave identically.
+export const DEFAULT_NETWORK: Network = "mainnet";
 
 export function arcChainFor(network: Network) {
   return network === "mainnet" ? arcMainnetChain : arcTestnetChain;
