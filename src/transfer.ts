@@ -26,7 +26,7 @@ import { TransferError, SubmissionTimeoutError, AttestationNotReadyError } from 
 import { toRawAmount, fromRawAmount, decimalsForChain } from "./utils/amount.js";
 import { parseUsdcAmount, stellarAddressToBytes32, evmAddressToBytes32, encodeStellarForwardHook } from "./utils/encoding.js";
 import { decodeCctpMessage } from "./utils/message.js";
-import { approveUsdcOnArc, burnUsdcOnArc, burnUsdcOnArcWithStellarForward, receiveMessageOnArc } from "./chains/arc.js";
+import { approveUsdcOnArc, burnUsdcOnArcWithStellarForward, receiveMessageOnArc } from "./chains/arc.js";
 import {
   approveUsdcOnStellar,
   burnUsdcOnStellar,
@@ -151,40 +151,27 @@ async function burn(args: {
     args;
 
   if (params.from === "arc") {
-    const signer = params.signer as ArcSigner;
+    const signer = params.signer;
 
-    if (params.to === "stellar") {
-      await assertStellarRecipientReady(params.recipient, network, stellarRpcUrl);
-    }
+    // Arc is only ever the source of a Stellar-bound transfer here, so the recipient
+    // check and the hook encoding are unconditional rather than gated on params.to.
+    await assertStellarRecipientReady(params.recipient, network, stellarRpcUrl);
 
     // TokenMessengerV2 pulls USDC via transferFrom under the hood; it must be
-    // approved to spend at least amountRaw before depositForBurn(WithHook) will
+    // approved to spend at least amountRaw before depositForBurnWithHook will
     // succeed. Approving the exact amount per call avoids leaving a standing
     // allowance beyond what this transfer needs.
     await approveUsdcOnArc(signer, amountRaw, network, arcRpcUrl);
     return runBurn(() => {
-      if (params.to === "stellar") {
-        const hookData = encodeStellarForwardHook(params.recipient);
-        const mintRecipientBytes32 = stellarAddressToBytes32(stellarConfig(network).cctpForwarder);
-        return burnUsdcOnArcWithStellarForward({
-          amountRaw,
-          destinationDomain: STELLAR_DOMAIN,
-          mintRecipientBytes32,
-          maxFeeRaw,
-          minFinalityThreshold,
-          hookData,
-          signer,
-          network,
-          rpcUrl: arcRpcUrl,
-        });
-      }
-      const mintRecipientBytes32 = evmAddressToBytes32(params.recipient);
-      return burnUsdcOnArc({
+      const hookData = encodeStellarForwardHook(params.recipient);
+      const mintRecipientBytes32 = stellarAddressToBytes32(stellarConfig(network).cctpForwarder);
+      return burnUsdcOnArcWithStellarForward({
         amountRaw,
-        destinationDomain: domainFor(params.to),
+        destinationDomain: STELLAR_DOMAIN,
         mintRecipientBytes32,
         maxFeeRaw,
         minFinalityThreshold,
+        hookData,
         signer,
         network,
         rpcUrl: arcRpcUrl,
@@ -192,7 +179,7 @@ async function burn(args: {
     });
   }
 
-  const signer = params.signer as StellarSigner;
+  const signer = params.signer;
   const mintRecipientBytes32 = evmAddressToBytes32(params.recipient);
   // Stellar's SEP-41 USDC token requires the same approve-before-transfer_from
   // pattern as ERC20 on Arc.

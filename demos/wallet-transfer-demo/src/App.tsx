@@ -56,54 +56,56 @@ export function App() {
     return chain === "arc" ? arcWallet.signer : stellarWallet.signer;
   }
 
-  async function handleSubmit() {
-    const signer = signerFor(form.from);
-    if (!signer) return;
-
-    const destinationSigner = form.useDestinationSigner ? signerFor(form.to) : undefined;
-
-    const params: TransferParams = {
-      from: form.from,
-      to: form.to,
+  // form.from and form.to are runtime values, so the direction has to be restated as a
+  // literal pair for the compiler to select the signer type the SDK requires. The form only
+  // ever holds the two supported directions, which flipDirection() preserves.
+  function burnParams(): TransferParams | null {
+    const shared = {
       amount: form.amount,
       recipient: form.recipient,
       speed: form.speed,
-      signer,
       network,
-      options: destinationSigner ? { destinationSigner } : undefined,
+      options: form.useDestinationSigner
+        ? { destinationSigner: signerFor(form.to) ?? undefined }
+        : undefined,
     };
+    if (form.from === "arc") {
+      const signer = arcWallet.signer;
+      return signer ? { ...shared, from: "arc", to: "stellar", signer } : null;
+    }
+    const signer = stellarWallet.signer;
+    return signer ? { ...shared, from: "stellar", to: "arc", signer } : null;
+  }
+
+  // The mint runs on form.to, so that is the chain whose signer must be supplied.
+  function mintParams(burnTxHash: string): CompleteMintParams | null {
+    if (form.to === "arc") {
+      const signer = arcWallet.signer;
+      return signer ? { from: "stellar", to: "arc", burnTxHash, signer, network } : null;
+    }
+    const signer = stellarWallet.signer;
+    return signer ? { from: "arc", to: "stellar", burnTxHash, signer, network } : null;
+  }
+
+  async function handleSubmit() {
+    const params = burnParams();
+    if (!params) return;
 
     await submit(params);
   }
 
   async function handleCompleteMint() {
     if (!result) return;
-    const destinationSigner = signerFor(form.to);
-    if (!destinationSigner) return;
-
-    const params: CompleteMintParams = {
-      from: form.from,
-      to: form.to,
-      burnTxHash: result.burnTxHash,
-      signer: destinationSigner,
-      network,
-    };
+    const params = mintParams(result.burnTxHash);
+    if (!params) return;
 
     await finishPending(params);
   }
 
   async function handleRecoverMint() {
     if (!recoverableBurnTxHash) return;
-    const destinationSigner = signerFor(form.to);
-    if (!destinationSigner) return;
-
-    const params: CompleteMintParams = {
-      from: form.from,
-      to: form.to,
-      burnTxHash: recoverableBurnTxHash,
-      signer: destinationSigner,
-      network,
-    };
+    const params = mintParams(recoverableBurnTxHash);
+    if (!params) return;
 
     await finishPending(params);
   }

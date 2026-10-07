@@ -16,12 +16,21 @@ export interface ArcSigner {
   walletClient: WalletClient;
 }
 
-/** Signs Stellar transactions, either via a Keypair or a custom sign function (hardware wallets). */
-export interface StellarSigner {
-  publicKey: string;
-  keypair?: Keypair;
-  signTransaction?: (xdr: string, networkPassphrase: string) => Promise<string>;
-}
+/** Signs a prepared Stellar transaction XDR and returns the signed XDR. */
+export type StellarSignFunction = (xdr: string, networkPassphrase: string) => Promise<string>;
+
+/**
+ * Signs Stellar transactions. `publicKey` is always required. At least one signing route
+ * must also be supplied, either a Keypair held in process or a custom sign function for a
+ * hardware wallet or an external signer, so the "neither was provided" case is a compile
+ * error rather than a throw discovered after a Soroban round trip.
+ *
+ * Supplying both is allowed; signTransaction is then preferred.
+ */
+export type StellarSigner = { publicKey: string } & (
+  | { keypair: Keypair; signTransaction?: StellarSignFunction }
+  | { keypair?: undefined; signTransaction: StellarSignFunction }
+);
 
 export type Signer = ArcSigner | StellarSigner;
 
@@ -57,13 +66,21 @@ export interface TransferOptions {
   destinationSigner?: Signer;
 }
 
-export interface TransferParams {
-  from: ChainId;
-  to: ChainId;
+/**
+ * Parameters for transfer(). The direction decides which signer is required: a transfer
+ * burns on its source chain, so `signer` must be native to `from`. Naming a signer for
+ * the wrong chain is a compile error rather than a runtime failure after the burn.
+ */
+export type TransferParams = TransferParamsBase &
+  (
+    | { from: "arc"; to: "stellar"; signer: ArcSigner }
+    | { from: "stellar"; to: "arc"; signer: StellarSigner }
+  );
+
+interface TransferParamsBase {
   amount: string;
   recipient: string;
   speed: TransferSpeed;
-  signer: Signer;
   /** Which deployment to transact against. Default "mainnet". */
   network?: Network;
   options?: TransferOptions;
@@ -112,15 +129,19 @@ export interface CompleteMintOptions {
   arcRpcUrl?: string;
 }
 
-export interface CompleteMintParams {
-  /** The destination chain of the original transfer (the "to" you passed to transfer()). */
-  to: ChainId;
-  /** The source chain of the original transfer (the "from" you passed to transfer()). */
-  from: ChainId;
+/**
+ * Parameters for completeMint(). The mint runs on `to`, so `signer` must be native to
+ * `to`, which is what the direction pair pins down at compile time.
+ */
+export type CompleteMintParams = CompleteMintParamsBase &
+  (
+    | { from: "arc"; to: "stellar"; signer: StellarSigner }
+    | { from: "stellar"; to: "arc"; signer: ArcSigner }
+  );
+
+interface CompleteMintParamsBase {
   /** The burnTxHash returned by the earlier pending transfer() call. */
   burnTxHash: string;
-  /** Signer native to the destination chain, used to submit receiveMessage / mint_and_forward. */
-  signer: Signer;
   /** Which deployment the original transfer ran on. Default "mainnet". */
   network?: Network;
   /** Polling and RPC knobs. Preferred over the top-level equivalents below. */

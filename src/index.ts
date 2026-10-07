@@ -22,6 +22,7 @@ export type {
   TransferStatus,
   ArcSigner,
   StellarSigner,
+  StellarSignFunction,
   Signer,
   TransferOptions,
   TransferParams,
