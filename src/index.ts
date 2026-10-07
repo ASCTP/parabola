@@ -3,6 +3,7 @@ export { estimateFee } from "./estimate.js";
 export { getAttestation } from "./iris/poll.js";
 export { decodeCctpMessage } from "./utils/message.js";
 export { decodeStellarForwardHook } from "./utils/encoding.js";
+export { decimalsForChain } from "./utils/amount.js";
 export { arcTestnetChain, arcMainnetChain } from "./chains/arc.js";
 export { checkStellarRecipientReady } from "./chains/stellar.js";
 // Re-exported so a consumer building a StellarSigner does not have to add @stellar/stellar-sdk
