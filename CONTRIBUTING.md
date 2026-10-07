@@ -124,18 +124,19 @@ You do not need funded Arc or Stellar accounts to work on the SDK itself, since 
 parabola/
   src/
     index.ts          # primary exports
-    transfer.ts        # core transfer orchestration (transfer, completeMint)
+    transfer.ts        # core transfer orchestration (transfer, completeMint, resolveBurn)
     estimate.ts         # fee estimation
     constants.ts        # contract addresses, domain IDs, RPC/Iris URLs
     chains/
       arc.ts            # Arc-specific CCTP logic (viem)
       stellar.ts         # Stellar-specific CCTP logic, CctpForwarder routing (Soroban)
     iris/
-      poll.ts            # Iris attestation polling and fee lookups
+      poll.ts            # Iris attestation polling, single reads, and fee lookups
       types.ts            # Iris API response types
     utils/
-      encoding.ts         # Stellar address translation, precision conversion
+      encoding.ts         # Stellar address translation, precision conversion, hook encode/decode
       amount.ts            # USDC amount parsing and formatting
+      message.ts           # CCTP V2 message decoding (header, burn body, forward hook)
     types.ts              # all exported TypeScript types
   tests/                 # vitest, one file per module above
   examples/              # runnable examples (mainnet default, NETWORK=testnet override)

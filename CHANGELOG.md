@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-07
+
+### Added
+
+- `resolveBurn()`, which reads back what a burn has already committed to: the source and destination domains, the raw amount, and for a Stellar-bound burn the account the mint will actually pay. It resolves as soon as Circle's Iris service has indexed the burn, which is before Circle has signed, so a service can learn a burn's destination while the attestation is still pending.
+- `getAttestation()`, a single non-blocking Iris read for callers that need to answer immediately and finish later, instead of polling to a deadline the way `completeMint()` does.
+- `decodeCctpMessage()` and `decodeStellarForwardHook()`, decoders for the CCTP V2 message layout and the Stellar forward-recipient hook. `tests/message.test.ts` pins the byte offsets against a live testnet attestation rather than against the specification alone.
+- `AttestationNotReadyError` and `IrisRequestError`, so "Circle has not attested this yet" and "Circle's API is failing" are distinguishable by class instead of by matching message text. `TransferError` also carries a `code`, set to `"ATTESTATION_NOT_READY"` for the retryable case.
+- `options.arcRpcUrl`, the Arc counterpart to `options.stellarRpcUrl`, applied to the receipt reads Parabola performs.
+- `CompleteMintParams.options`, accepting the same `pollInterval`, `pollTimeout`, `stellarRpcUrl`, and `arcRpcUrl` as `TransferOptions`. The top-level equivalents still resolve, and `options` wins when both are present.
+- `decimalsForChain()` and a re-export of `Keypair` from the package root, so a consumer building a `StellarSigner` does not need a second copy of `@stellar/stellar-sdk` in its own manifest.
+
+### Changed
+
+- **Breaking:** `TransferParams` and `CompleteMintParams` are discriminated unions over the transfer direction. `transfer()` requires a signer native to `from` and `completeMint()` one native to `to`, so a mismatched signer that previously compiled now fails to typecheck. Arc-to-Arc and Stellar-to-Stellar are no longer representable, since neither is a CCTP transfer.
+- **Breaking:** `StellarSigner` requires at least one signing route. `{ publicKey }` with neither `keypair` nor `signTransaction` no longer compiles. Supplying both remains valid and prefers `signTransaction`.
+- **Breaking:** `completeMint()` reads the Stellar recipient out of the burn message's forward hook and checks it before submitting, and refuses to submit when the hook carries no readable recipient. It previously performed no recipient check at all, leaving the less-guarded entry point as the one a relayer uses. A burn whose forward hook cannot be decoded is now rejected rather than minted into an unknown destination.
+- Attestation polling distinguishes a `404` from Iris, which means the burn is not indexed yet and is an ordinary early state, from a `5xx`, which is an upstream failure. Five consecutive failures now stop polling with an `IrisRequestError` rather than running the clock to its deadline.
+- `decimalsForChain()` reads the USDC scale as a property of the asset rather than of the deployment. No behavior change: Arc USDC is 6 decimals and Stellar USDC is 7 on both networks, and the previous code read the testnet constants for mainnet calls because the values are identical.
+
+### Fixed
+
+- A broken Circle Iris looked identical to a slow one. Non-OK responses were discarded and the polling loop ran to its deadline, so an outage surfaced as a timeout and neither the caller nor the operator's logs could tell the two apart.
+- A not-yet-attested burn threw a plain `Error`, leaving a service to match prose to decide between a retryable `409` and a terminal `502`. It is now `AttestationNotReadyError`, or a `TransferError` whose `code` is `"ATTESTATION_NOT_READY"`.
+
+### Documentation
+
+- `README.md` documents the relayer pattern for completing a burn Parabola did not produce, the error taxonomy a service branches on, and the two scales Arc reports USDC at. Arc's native gas asset and its ERC-20 USDC are one balance at 18 and 6 decimals respectively, so a balance floor expressed in the wrong scale is wrong by a factor of 10^12.
+- `INTEGRATION.md` replaces the "burnTxHash is lost if attestation polling times out" section, which 0.2.0 had already made obsolete, with the behavior a service now gets: `TransferError` carries the hash, and the retryable state is signalled by type.
+
 ## [0.3.1] - 2026-09-30
 
 ### Fixed
