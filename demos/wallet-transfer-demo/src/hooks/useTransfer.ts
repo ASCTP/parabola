@@ -31,7 +31,7 @@ export function useTransfer() {
   const [feeEstimate, setFeeEstimate] = useState<FeeEstimate | null>(null);
   const [estimating, setEstimating] = useState(false);
 
-  const submit = useCallback(async (params: TransferParams) => {
+  const submit = useCallback(async (params: TransferParams): Promise<TransferResult | null> => {
     setStatus("submitting");
     setError(null);
     setRecoverableBurnTxHash(null);
@@ -40,6 +40,7 @@ export function useTransfer() {
       const transferResult = await transfer(params);
       setResult(transferResult);
       setStatus(transferResult.status === "success" ? "success" : "pending");
+      return transferResult;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
@@ -49,6 +50,7 @@ export function useTransfer() {
         setSubmissionUncertain(true);
       }
       setStatus("error");
+      return null;
     }
   }, []);
 
@@ -74,6 +76,18 @@ export function useTransfer() {
       }
       setStatus("error");
     }
+  }, []);
+
+  // Marks the pending transfer complete from a mint produced outside this hook, i.e. by the
+  // Onderhaus sponsor rather than by completeMint() with a local wallet. The burn and
+  // attestation already happened, so only the final hashes and status change.
+  const markCompleted = useCallback((mintTxHash: string, attestationHash: string) => {
+    setResult((previous) =>
+      previous
+        ? { ...previous, status: "success", mintTxHash, attestationHash: attestationHash || previous.attestationHash }
+        : previous,
+    );
+    setStatus("success");
   }, []);
 
   const estimate = useCallback(async (params: EstimateFeeParams) => {
@@ -103,6 +117,7 @@ export function useTransfer() {
     submissionUncertain,
     submit,
     finishPending,
+    markCompleted,
     feeEstimate,
     estimating,
     estimate,

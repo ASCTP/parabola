@@ -14,9 +14,24 @@ interface Props {
   onCompleteMint: () => void;
   completing: boolean;
   destinationWalletConnected: boolean;
+  onCompleteSponsored: () => void;
+  sponsorConfigured: boolean;
+  sponsoring: boolean;
+  sponsorError: string | null;
 }
 
-export function TransferStatus({ result, from, to, onCompleteMint, completing, destinationWalletConnected }: Props) {
+export function TransferStatus({
+  result,
+  from,
+  to,
+  onCompleteMint,
+  completing,
+  destinationWalletConnected,
+  onCompleteSponsored,
+  sponsorConfigured,
+  sponsoring,
+  sponsorError,
+}: Props) {
   return (
     <div className="transfer-status">
       <ol className="status-steps">
@@ -53,16 +68,24 @@ export function TransferStatus({ result, from, to, onCompleteMint, completing, d
         <div className="complete-mint">
           <p className="hint">
             No destination signer was attached, so the transfer stopped after the burn and
-            attestation. This is the recovery path: call <code>completeMint()</code> with the
-            stored <code>burnTxHash</code> whenever the destination wallet is available.
+            attestation. Finish it with the destination wallet, or let Onderhaus sponsor it and
+            pay the fee for you.
           </p>
-          <button onClick={onCompleteMint} disabled={completing || !destinationWalletConnected}>
-            {completing
-              ? "Completing..."
-              : destinationWalletConnected
-                ? "Complete mint"
-                : `Connect ${to} wallet to complete`}
-          </button>
+          <div className="complete-options">
+            <button onClick={onCompleteMint} disabled={completing || sponsoring || !destinationWalletConnected}>
+              {completing
+                ? "Completing..."
+                : destinationWalletConnected
+                  ? "Complete with wallet"
+                  : `Connect ${to} wallet to complete`}
+            </button>
+            {sponsorConfigured && (
+              <button className="secondary" onClick={onCompleteSponsored} disabled={sponsoring || completing}>
+                {sponsoring ? "Sponsoring..." : "Complete sponsored (Onderhaus)"}
+              </button>
+            )}
+          </div>
+          {sponsorError && <span className="field-error">{sponsorError}</span>}
         </div>
       )}
     </div>

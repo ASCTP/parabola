@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { TransferParams, CompleteMintParams, Network } from "@asctp/parabola";
 import { DEFAULT_NETWORK } from "./lib/network.js";
+import { completeSponsored, pingReadyz, sponsorConfigured } from "./lib/onderhaus.js";
 import { useArcWallet } from "./hooks/useArcWallet.js";
 import { useStellarWallet } from "./hooks/useStellarWallet.js";
 import { useTransfer } from "./hooks/useTransfer.js";
@@ -19,6 +20,7 @@ const initialForm: TransferFormState = {
   recipient: "",
   speed: "standard",
   useDestinationSigner: true,
+  sponsored: false,
 };
 
 export function App() {
@@ -33,6 +35,7 @@ export function App() {
     submissionUncertain,
     submit,
     finishPending,
+    markCompleted,
     feeEstimate,
     estimating,
     estimate,
@@ -40,6 +43,24 @@ export function App() {
   } = useTransfer();
 
   const [form, setForm] = useState<TransferFormState>(initialForm);
+  const [sponsoring, setSponsoring] = useState(false);
+  const [sponsorError, setSponsorError] = useState<string | null>(null);
+  // The sponsor toggle is available only when Onderhaus is configured and its /readyz probe
+  // answers ok, so the user cannot pick a path that would fail at submission.
+  const [sponsorReady, setSponsorReady] = useState(false);
+
+  useEffect(() => {
+    if (!sponsorConfigured) return;
+    let active = true;
+    pingReadyz().then((ready) => {
+      if (active) setSponsorReady(ready);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const sponsorAvailable = sponsorConfigured && sponsorReady;
 
   // An Arc signer is a viem WalletClient bound to one chain, so switching networks while a
   // wallet is connected would leave a signer pointed at the wrong chain. Drop both and clear
@@ -49,6 +70,7 @@ export function App() {
     arcWallet.disconnect();
     stellarWallet.disconnect();
     reset();
+    setSponsorError(null);
     setNetwork(next);
   }
 
@@ -64,10 +86,14 @@ export function App() {
       network,
     };
 
+    // Sponsored transfers are completed by Onderhaus, so they never carry a destinationSigner;
+    // the burn goes through and leaves the transfer pending for the paymaster to finish.
+    const attachDestination = form.useDestinationSigner && !form.sponsored;
+
     if (form.from === "arc") {
       const signer = arcWallet.signer;
       if (!signer) return null;
-      const destinationSigner = form.useDestinationSigner ? stellarWallet.signer : null;
+      const destinationSigner = attachDestination ? stellarWallet.signer : null;
       return {
         ...shared,
         from: "arc",
@@ -79,7 +105,7 @@ export function App() {
 
     const signer = stellarWallet.signer;
     if (!signer) return null;
-    const destinationSigner = form.useDestinationSigner ? arcWallet.signer : null;
+    const destinationSigner = attachDestination ? arcWallet.signer : null;
     return {
       ...shared,
       from: "stellar",
@@ -109,7 +135,13 @@ export function App() {
     const params = burnParams();
     if (!params) return;
 
-    await submit(params);
+    setSponsorError(null);
+    const transferResult = await submit(params);
+    // In sponsored mode the burn returns pending; hand it straight to Onderhaus to finish,
+    // so the user never sees a manual completion step.
+    if (form.sponsored && transferResult?.status === "pending") {
+      await sponsorComplete(transferResult.burnTxHash);
+    }
   }
 
   async function handleCompleteMint() {
@@ -126,6 +158,32 @@ export function App() {
     if (!params) return;
 
     await finishPending(params);
+  }
+
+  // Onderhaus completes the mint from its own funded account, so the sponsored path needs no
+  // destination wallet, only the burn hash and the recipient the burn already committed to.
+  async function sponsorComplete(burnTxHash: string) {
+    setSponsoring(true);
+    setSponsorError(null);
+    try {
+      const sponsored = await completeSponsored({
+        burnTxHash,
+        from: form.from,
+        to: form.to,
+        recipient: form.recipient,
+        network,
+      });
+      markCompleted(sponsored.mintTxHash, sponsored.attestationHash);
+    } catch (err) {
+      setSponsorError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSponsoring(false);
+    }
+  }
+
+  function handleCompleteSponsored() {
+    if (!result) return;
+    void sponsorComplete(result.burnTxHash);
   }
 
   return (
@@ -161,7 +219,8 @@ export function App() {
           arcWallet={arcWallet}
           stellarWallet={stellarWallet}
           onSubmit={handleSubmit}
-          submitting={status === "submitting"}
+          submitting={status === "submitting" || sponsoring}
+          sponsorAvailable={sponsorAvailable}
         />
         <FeeEstimate
           from={form.from}
@@ -196,6 +255,10 @@ export function App() {
             onCompleteMint={handleCompleteMint}
             completing={status === "submitting"}
             destinationWalletConnected={destinationWalletConnected()}
+            onCompleteSponsored={handleCompleteSponsored}
+            sponsorConfigured={sponsorAvailable}
+            sponsoring={sponsoring}
+            sponsorError={sponsorError}
           />
         </section>
       )}

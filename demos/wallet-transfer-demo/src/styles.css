@@ -158,6 +158,18 @@ label.toggle-row {
   color: var(--fg);
 }
 
+.toggle-group {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 20px;
+}
+
+.toggle-group .toggle-row {
+  white-space: nowrap;
+}
+
 .toggle-switch {
   position: relative;
   display: inline-block;
@@ -173,6 +185,15 @@ label.toggle-row {
   opacity: 0;
   cursor: pointer;
   z-index: 1;
+}
+
+.toggle-switch input:disabled {
+  cursor: not-allowed;
+}
+
+.toggle-row:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .toggle-track {
@@ -243,6 +264,7 @@ label.toggle-row {
   border: 1px solid var(--border);
   background: var(--card);
   color: var(--fg);
+  white-space: normal;
   font-size: 0.78rem;
   line-height: 1.4;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -392,6 +414,17 @@ button:disabled {
   gap: 8px;
   padding-top: 8px;
   border-top: 1px solid var(--border);
+}
+
+.complete-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+button.secondary {
+  background: none;
+  color: var(--accent);
 }
 
 code {

@@ -12,6 +12,9 @@ export interface TransferFormState {
   /** Whether to attach options.destinationSigner (single-call path) or leave the transfer
    *  "pending" and complete it separately (two-step path); both are real Parabola patterns. */
   useDestinationSigner: boolean;
+  /** Let the Onderhaus paymaster complete the mint and pay the destination fee, so no
+   *  destination wallet is needed. Overrides useDestinationSigner while on. */
+  sponsored: boolean;
 }
 
 const ARC_RECIPIENT_PATTERN = /^0x[a-fA-F0-9]{40}$/;
@@ -19,6 +22,9 @@ const STELLAR_RECIPIENT_PATTERN = /^[GC][A-Z2-7]{55}$/;
 
 const TOGGLE_INFO =
   "When turned on, both wallets must be connected. When turned off, only the source wallet is needed. You must provide a recipient address, and manually finish the mint.";
+
+const SPONSOR_INFO =
+  "Burn from the source wallet, then let the Onderhaus paymaster submit the mint and pay the destination fee. No destination wallet is needed. You just provide the recipient address.";
 
 export function recipientError(to: ChainId, recipient: string): string | null {
   if (!recipient) return null;
@@ -34,15 +40,22 @@ interface Props {
   stellarWallet: ReturnType<typeof useStellarWallet>;
   onSubmit: () => void;
   submitting: boolean;
+  sponsorAvailable: boolean;
 }
 
-export function TransferForm({ value, onChange, arcWallet, stellarWallet, onSubmit, submitting }: Props) {
+export function TransferForm({ value, onChange, arcWallet, stellarWallet, onSubmit, submitting, sponsorAvailable }: Props) {
   const sourceWallet = value.from === "arc" ? arcWallet : stellarWallet;
   const destinationWallet = value.to === "arc" ? arcWallet : stellarWallet;
 
   const sourceReady = sourceWallet.status === "connected";
-  const destinationReady = !value.useDestinationSigner || destinationWallet.status === "connected";
-  const recipientErr = recipientError(value.to, value.recipient);
+  // When sponsored, Onderhaus completes the mint, so no destination wallet is needed. Otherwise
+  // the destination wallet is only needed for the single-call (destinationSigner) path.
+  const destinationReady =
+    value.sponsored || !value.useDestinationSigner || destinationWallet.status === "connected";
+  // The recipient address is typed in whenever this app is not pulling it from a connected
+  // destination wallet, i.e. the two-step path and the sponsored path.
+  const needsRecipient = value.sponsored || !value.useDestinationSigner;
+  const recipientErr = needsRecipient ? recipientError(value.to, value.recipient) : null;
   const canSubmit = sourceReady && destinationReady && !recipientErr && Number(value.amount) > 0 && !submitting;
 
   // Most demo transfers are to yourself, across your own two wallets. Default the
@@ -105,27 +118,52 @@ export function TransferForm({ value, onChange, arcWallet, stellarWallet, onSubm
         </select>
       </label>
 
-      <label className="toggle-row">
-        <span className="toggle-switch">
-          <input
-            type="checkbox"
-            checked={value.useDestinationSigner}
-            onChange={(e) => onChange({ ...value, useDestinationSigner: e.target.checked })}
-          />
-          <span className="toggle-track" aria-hidden="true" />
-        </span>
-        Complete the mint automatically
-        <span className="info-tooltip">
-          <button type="button" className="info-icon" aria-label="More info">
-            i
-          </button>
-          <span className="info-bubble" role="tooltip">
-            {TOGGLE_INFO}
+      <div className="toggle-group">
+        <label className="toggle-row">
+          <span className="toggle-switch">
+            <input
+              type="checkbox"
+              checked={value.useDestinationSigner && !value.sponsored}
+              disabled={value.sponsored}
+              onChange={(e) => onChange({ ...value, useDestinationSigner: e.target.checked })}
+            />
+            <span className="toggle-track" aria-hidden="true" />
           </span>
-        </span>
-      </label>
+          Complete the mint automatically
+          <span className="info-tooltip">
+            <button type="button" className="info-icon" aria-label="More info">
+              i
+            </button>
+            <span className="info-bubble" role="tooltip">
+              {TOGGLE_INFO}
+            </span>
+          </span>
+        </label>
 
-      {!value.useDestinationSigner && (
+        <label className="toggle-row">
+          <span className="toggle-switch">
+            <input
+              type="checkbox"
+              checked={value.sponsored}
+              disabled={!sponsorAvailable}
+              title={sponsorAvailable ? undefined : "Onderhaus is not configured or not responding"}
+              onChange={(e) => onChange({ ...value, sponsored: e.target.checked })}
+            />
+            <span className="toggle-track" aria-hidden="true" />
+          </span>
+          Sponsor the mint with Onderhaus
+          <span className="info-tooltip">
+            <button type="button" className="info-icon" aria-label="More info">
+              i
+            </button>
+            <span className="info-bubble" role="tooltip">
+              {SPONSOR_INFO}
+            </span>
+          </span>
+        </label>
+      </div>
+
+      {needsRecipient && (
         <label>
           <span className="label-row">
             Recipient ({value.to === "arc" ? "Arc address" : "Stellar address"})
