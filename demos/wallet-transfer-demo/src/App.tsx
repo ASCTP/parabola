@@ -252,6 +252,7 @@ export function App() {
             result={result}
             from={form.from}
             to={form.to}
+            network={network}
             onCompleteMint={handleCompleteMint}
             completing={status === "submitting"}
             destinationWalletConnected={destinationWalletConnected()}

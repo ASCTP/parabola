@@ -1,16 +1,18 @@
-import type { ChainId, TransferResult } from "@asctp/parabola";
-import { ARC_TESTNET } from "@asctp/parabola";
+import type { ChainId, Network, TransferResult } from "@asctp/parabola";
+import { arcNetworkConfig } from "../lib/network.js";
 import { shortenTxHash, formatDurationMs } from "../lib/formatting.js";
 
-function explorerUrl(chain: ChainId, txHash: string): string {
-  if (chain === "arc") return `${ARC_TESTNET.explorerUrl}/tx/${txHash}`;
-  return `https://stellar.expert/explorer/testnet/tx/${txHash}`;
+function explorerUrl(chain: ChainId, txHash: string, network: Network): string {
+  if (chain === "arc") return `${arcNetworkConfig(network).explorerUrl}/tx/${txHash}`;
+  const stellarNetwork = network === "mainnet" ? "public" : "testnet";
+  return `https://stellar.expert/explorer/${stellarNetwork}/tx/${txHash}`;
 }
 
 interface Props {
   result: TransferResult;
   from: ChainId;
   to: ChainId;
+  network: Network;
   onCompleteMint: () => void;
   completing: boolean;
   destinationWalletConnected: boolean;
@@ -24,6 +26,7 @@ export function TransferStatus({
   result,
   from,
   to,
+  network,
   onCompleteMint,
   completing,
   destinationWalletConnected,
@@ -38,7 +41,7 @@ export function TransferStatus({
         <li className="status-step done">
           Burn on {from}
           {": "}
-          <a href={explorerUrl(from, result.burnTxHash)} target="_blank" rel="noreferrer">
+          <a href={explorerUrl(from, result.burnTxHash, network)} target="_blank" rel="noreferrer">
             {shortenTxHash(result.burnTxHash)}
           </a>
         </li>
@@ -50,7 +53,7 @@ export function TransferStatus({
             <>
               Mint on {to}
               {": "}
-              <a href={explorerUrl(to, result.mintTxHash)} target="_blank" rel="noreferrer">
+              <a href={explorerUrl(to, result.mintTxHash, network)} target="_blank" rel="noreferrer">
                 {shortenTxHash(result.mintTxHash)}
               </a>
             </>
