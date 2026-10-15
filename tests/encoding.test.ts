@@ -124,16 +124,54 @@ describe("parseUsdcAmount / formatUsdcAmount", () => {
 });
 
 describe("convertPrecision", () => {
+  it("is exported directly from the package entrypoint", async () => {
+    const pkg = await import("../src/index.js");
+    expect(pkg.convertPrecision).toBe(convertPrecision);
+    expect(typeof pkg.convertPrecision).toBe("function");
+  });
+
   it("converts Stellar's 7-decimal USDC down to Arc's 6-decimal USDC, truncating excess precision", () => {
     // 10.5000001 on Stellar (7 decimals) -> 10.500000 on Arc (6 decimals), truncated
     expect(convertPrecision(105_000_001n, 7, 6)).toBe(10_500_000n);
   });
 
-  it("converts Arc's 6-decimal USDC up to Stellar's 7-decimal USDC", () => {
+  it("converts Arc's 6-decimal USDC up to Stellar's 7-decimal USDC with exactness", () => {
+    // 10.500000 on Arc (6 decimals) -> 10.5000000 on Stellar (7 decimals)
     expect(convertPrecision(10_500_000n, 6, 7)).toBe(105_000_000n);
+    expect(convertPrecision(1n, 6, 7)).toBe(10n);
+    expect(convertPrecision(999_999_999n, 6, 7)).toBe(9_999_999_990n);
   });
 
-  it("is a no-op when decimals match", () => {
+  it("handles zero across all decimal configurations", () => {
+    expect(convertPrecision(0n, 6, 7)).toBe(0n);
+    expect(convertPrecision(0n, 7, 6)).toBe(0n);
+    expect(convertPrecision(0n, 6, 6)).toBe(0n);
+    expect(convertPrecision(0n, 7, 7)).toBe(0n);
+  });
+
+  it("is an identity no-op when source and target decimals match", () => {
     expect(convertPrecision(123n, 6, 6)).toBe(123n);
+    expect(convertPrecision(9876543210n, 7, 7)).toBe(9876543210n);
+  });
+
+  it("preserves exact identity when round-tripping 6 -> 7 -> 6 decimals", () => {
+    // Arc amounts (6 decimals) scaled to Stellar (7 decimals) and back to Arc retain exact precision
+    const originalArc = 25_750_123n; // 25.750123 USDC
+    const scaledToStellar = convertPrecision(originalArc, 6, 7);
+    expect(scaledToStellar).toBe(257_501_230n);
+    const roundTrippedArc = convertPrecision(scaledToStellar, 7, 6);
+    expect(roundTrippedArc).toBe(originalArc);
+  });
+
+  it("truncates sub-micro precision when round-tripping 7 -> 6 -> 7 decimals", () => {
+    // Stellar amounts with 7 decimals (e.g. 0.0000009 USDC) lose the 7th fractional digit when converted to Arc 6-decimals
+    const originalStellar = 257_501_239n; // 25.7501239 USDC
+    const downscaledToArc = convertPrecision(originalStellar, 7, 6);
+    // Downscale truncates the trailing 9
+    expect(downscaledToArc).toBe(25_750_123n); // 25.750123 USDC
+    const roundTrippedStellar = convertPrecision(downscaledToArc, 6, 7);
+    // Upscale restores zero in the 7th decimal place; exactly 9 units (0.0000009 USDC) are truncated
+    expect(roundTrippedStellar).toBe(257_501_230n);
+    expect(originalStellar - roundTrippedStellar).toBe(9n);
   });
 });
