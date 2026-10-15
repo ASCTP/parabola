@@ -35,6 +35,22 @@ describe("stellarAddressToBytes32 / bytes32ToStellarAddress", () => {
       /Invalid Stellar address/,
     );
   });
+
+  it("rejects bytes32 values with non-hex characters", () => {
+    expect(() => bytes32ToStellarAddress(`0x${"g".repeat(64)}`)).toThrow(
+      /Invalid bytes32/,
+    );
+  });
+
+  it("rejects bytes32 values with odd or incorrect lengths", () => {
+    expect(() => bytes32ToStellarAddress("0x123")).toThrow(/Invalid bytes32/);
+    expect(() => bytes32ToStellarAddress("0x1234")).toThrow(/Invalid bytes32/);
+  });
+
+  it("rejects bytes32 values without the 0x prefix", () => {
+    const missingPrefix = "0".repeat(64) as `0x${string}`;
+    expect(() => bytes32ToStellarAddress(missingPrefix)).toThrow(/Invalid bytes32/);
+  });
 });
 
 describe("encodeStellarForwardHook", () => {
