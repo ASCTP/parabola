@@ -22,3 +22,10 @@ export class InvalidStateTransitionError extends KernelError {
     this.event = event;
   }
 }
+
+export class TransferProgressError extends Error {
+  constructor(cause: unknown) {
+    super("Transfer progress handler failed", { cause });
+    this.name = new.target.name;
+  }
+}

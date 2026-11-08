@@ -9,6 +9,7 @@ import {
   SubmissionTimeoutError,
   TransferError,
 } from "../errors.js";
+import { TransferProgressError } from "./errors.js";
 import type {
   CompleteMintParams,
   CompleteMintResult,
@@ -21,17 +22,40 @@ import type {
 import { decimalsForChain, fromRawAmount, toRawAmount } from "../utils/amount.js";
 import { parseUsdcAmount } from "../utils/encoding.js";
 import { decodeCctpMessage } from "../utils/message.js";
-import type { SettlementDependencies, SettlementKernel } from "./contracts.js";
+import type {
+  SettlementDependencies,
+  SettlementKernel,
+  TransferProgress,
+  TransferProgressHandler,
+  TransferRunOptions,
+} from "./contracts.js";
 import { transition, type TransferPhase } from "./state.js";
 
 const FAST_ESTIMATED_DURATION_SECONDS = 15;
+
+function progressReporter(handler?: TransferProgressHandler) {
+  return async (progress: TransferProgress): Promise<void> => {
+    if (!handler) {
+      return;
+    }
+    try {
+      await handler(progress);
+    } catch (err) {
+      throw new TransferProgressError(err);
+    }
+  };
+}
 
 export function createSettlementKernel(
   deps: SettlementDependencies,
 ): SettlementKernel {
   return {
-    async transfer(params: TransferParams): Promise<TransferResult> {
+    async transfer(
+      params: TransferParams,
+      runOptions?: TransferRunOptions,
+    ): Promise<TransferResult> {
       const start = Date.now();
+      const report = progressReporter(runOptions?.onProgress);
       const options = params.options ?? {};
       const network = params.network ?? "mainnet";
       const stellarRpcUrl = options.stellarRpcUrl;
@@ -78,6 +102,8 @@ export function createSettlementKernel(
         transferMode === "fast" && options.maxFee !== undefined
           ? parseUsdcAmount(options.maxFee, decimalsForChain(params.from))
           : feeRaw;
+      const fee =
+        transferMode === "fast" ? fromRawAmount(feeRaw, params.from) : "0";
 
       const sourceAdapter = deps.chains[params.from];
       const destinationAdapter = deps.chains[params.to];
@@ -96,6 +122,7 @@ export function createSettlementKernel(
       }
 
       phase = transition(phase, { type: "BURN_STARTED" });
+      await report({ phase, transferMode, fee });
       let burnTxHash: string;
       try {
         const burn = await sourceAdapter.burn({
@@ -118,6 +145,7 @@ export function createSettlementKernel(
         throw err;
       }
       phase = transition(phase, { type: "BURN_CONFIRMED" });
+      await report({ phase, burnTxHash, transferMode, fee });
 
       let attestationHash: string | undefined;
       let mintTxHash = "";
@@ -134,6 +162,13 @@ export function createSettlementKernel(
         });
         phase = transition(phase, { type: "ATTESTATION_READY" });
         attestationHash = attestation.attestation ?? undefined;
+        await report({
+          phase,
+          burnTxHash,
+          attestationHash,
+          transferMode,
+          fee,
+        });
 
         if (
           options.destinationSigner &&
@@ -141,6 +176,13 @@ export function createSettlementKernel(
           attestation.attestation
         ) {
           phase = transition(phase, { type: "MINT_STARTED" });
+          await report({
+            phase,
+            burnTxHash,
+            attestationHash,
+            transferMode,
+            fee,
+          });
           const mint = await destinationAdapter.mint({
             from: params.from,
             to: params.to,
@@ -152,11 +194,29 @@ export function createSettlementKernel(
           });
           mintTxHash = mint.transactionHash;
           phase = transition(phase, { type: "MINT_CONFIRMED" });
+          await report({
+            phase,
+            burnTxHash,
+            attestationHash,
+            mintTxHash,
+            transferMode,
+            fee,
+          });
           status = "success";
         } else {
           phase = transition(phase, { type: "DEFERRED" });
+          await report({
+            phase,
+            burnTxHash,
+            attestationHash,
+            transferMode,
+            fee,
+          });
         }
       } catch (err) {
+        if (err instanceof TransferProgressError) {
+          throw err;
+        }
         const message = err instanceof Error ? err.message : String(err);
         const code =
           err instanceof AttestationNotReadyError
@@ -172,14 +232,16 @@ export function createSettlementKernel(
         burnTxHash,
         attestationHash: attestationHash ?? "",
         mintTxHash,
-        fee: transferMode === "fast" ? fromRawAmount(feeRaw, params.from) : "0",
+        fee,
         durationMs: Date.now() - start,
       };
     },
 
     async completeMint(
       params: CompleteMintParams,
+      runOptions?: TransferRunOptions,
     ): Promise<CompleteMintResult> {
+      const report = progressReporter(runOptions?.onProgress);
       const network = params.network ?? "mainnet";
       const options = params.options ?? {};
       const pollInterval =
@@ -193,6 +255,7 @@ export function createSettlementKernel(
 
       try {
         phase = transition(phase, { type: "ATTESTATION_STARTED" });
+        await report({ phase, burnTxHash: params.burnTxHash });
         const attestation = await deps.attestations.poll({
           source: params.from,
           transactionHash: params.burnTxHash,
@@ -208,6 +271,11 @@ export function createSettlementKernel(
             params.burnTxHash,
           );
         }
+        await report({
+          phase,
+          burnTxHash: params.burnTxHash,
+          attestationHash: attestation.attestation,
+        });
 
         if (params.to === "stellar") {
           const { forwardRecipient } = decodeCctpMessage(attestation.message);
@@ -224,6 +292,11 @@ export function createSettlementKernel(
         }
 
         phase = transition(phase, { type: "MINT_STARTED" });
+        await report({
+          phase,
+          burnTxHash: params.burnTxHash,
+          attestationHash: attestation.attestation,
+        });
         const mint = await deps.chains[params.to].mint({
           from: params.from,
           to: params.to,
@@ -234,12 +307,21 @@ export function createSettlementKernel(
           rpcUrl: params.to === "arc" ? arcRpcUrl : stellarRpcUrl,
         });
         phase = transition(phase, { type: "MINT_CONFIRMED" });
+        await report({
+          phase,
+          burnTxHash: params.burnTxHash,
+          attestationHash: attestation.attestation,
+          mintTxHash: mint.transactionHash,
+        });
 
         return {
           mintTxHash: mint.transactionHash,
           attestationHash: attestation.attestation,
         };
       } catch (err) {
+        if (err instanceof TransferProgressError) {
+          throw err;
+        }
         transition(phase, { type: "RECOVERY_REQUIRED" });
         throw err;
       }

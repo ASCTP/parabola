@@ -134,7 +134,7 @@ parabola/
       errors.ts         # kernel-level errors
     execution/
       contracts.ts      # transfer records and the store contract
-      executor.ts       # idempotent transfer execution over the kernel
+      executor.ts       # idempotent execution and burn recovery over the kernel
       errors.ts         # conflict and persistence errors
       memory-store.ts   # single-process store for tests and embedded use
       file-store.ts     # single-host JSON store
@@ -167,7 +167,7 @@ Changes to `src/constants.ts` affect every transfer path; see [Code Standards](#
 
 Parabola uses three layers of testing, each catching a different class of bug:
 
-1. **Unit tests (`tests/`, run via `pnpm test`).** Every network and RPC call is mocked with `vi.mock`. These are fast, run in CI on every push, and are the right place to cover argument-encoding bugs and every error branch; see the existing `vi.mock` patterns in `tests/arc.test.ts` and `tests/stellar.test.ts` for the convention. The execution tests add idempotency, conflict, and persistence coverage on top of the kernel tests. Unit tests cannot catch a wrong contract address, a wrong ABI, or a real-world RPC quirk, because nothing here talks to a real network.
+1. **Unit tests (`tests/`, run via `pnpm test`).** Every network and RPC call is mocked with `vi.mock`. These are fast, run in CI on every push, and are the right place to cover argument-encoding bugs and every error branch; see the existing `vi.mock` patterns in `tests/arc.test.ts` and `tests/stellar.test.ts` for the convention. The execution tests add idempotency, conflict, persistence, and burn recovery coverage on top of the kernel tests. Unit tests cannot catch a wrong contract address, a wrong ABI, or a real-world RPC quirk, because nothing here talks to a real network.
 
 2. **Live address verification (`pnpm verify:addresses`, `scripts/verify-contract-addresses.mjs`).** Confirms every address in `src/constants.ts` has real, deployed code at that address on its claimed network, both mainnet and testnet: Arc via `eth_getCode`, Stellar via `getContractData`. No funded account needed, since these are public reads. Runs in CI automatically on any PR that touches `src/constants.ts` (`.github/workflows/verify-contract-addresses.yml`). This catches typos and stale addresses; it cannot catch "right shape of address, wrong contract."
 

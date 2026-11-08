@@ -50,11 +50,15 @@ This rule is what makes the kernel testable with fake providers and what will le
 
 ## Durable execution
 
-`executeTransfer` wraps a `SettlementKernel` with a `TransferStore` keyed by a caller-supplied idempotency key. It creates the record atomically, persists `burning` before calling the kernel, then records `minted`, `pending`, `recoverable`, or `failed` before returning or rethrowing. A repeated key replays the stored result for `minted` or `pending` and raises `TransferConflictError` for every other phase. `TransferError` maps to `recoverable` because the source-chain burn exists. Any other failure maps to `failed`. Signers are never written to the store.
+`executeTransfer` wraps a `SettlementKernel` with a `TransferStore` keyed by a caller-supplied idempotency key. It creates the record atomically, persists `burning` before calling the kernel, then records each progress event the kernel emits. A repeated key must match the original from, to, network, amount, and recipient, or it raises `TransferConflictError` with reason `mismatch`. A repeated key replays the stored result for `minted` or `pending`. `TransferError` maps to `recoverable` because the source-chain burn exists. Any other failure maps to `failed`. Signers are never written to the store.
+
+The kernel emits progress at the durable boundaries: fee selection, burn confirmation, attestation readiness, mint start, and terminal state. The executor persists each event before the kernel continues, so a confirmed burn is recorded before attestation polling begins. If progress persistence fails, the kernel stops rather than advancing past an unrecorded boundary.
+
+When a record has a burn hash and is in `burned`, `attesting`, `attested`, or `recoverable`, a repeated call with a destination signer resumes through `completeMint` instead of repeating the burn. The resulting record is reconciled into `minted` with the original transfer mode and fee when they were recorded.
 
 `TransferStore.create` must be atomic. `MemoryTransferStore` is for tests and single-process use. `FileTransferStore` is a single-host reference store with one JSON file per key, atomic creation, and temporary-file rename for updates. It is not a distributed lock, and it does not coordinate writers across processes.
 
-This layer does not yet resume an in-flight kernel call after a crash, collect leases, or drive `completeMint` from `recoverable`. A record left in `burning` by a crash remains a conflict until an operator or a later reconciler resolves it. Those are the next execution slice.
+This layer does not yet collect leases or renew them, so concurrent processes need external coordination. A record left in `burning` without a burn hash is indeterminate because the burn may have landed, and a record left in `minting` is indeterminate because the mint may have landed. Neither is resumed automatically. Those cases require a reconciler that can inspect source and destination chain state. The next execution slice adds leases and that reconciliation.
 
 ## Provider contract
 
@@ -87,19 +91,21 @@ The kernel slice introduces the boundary without changing public behavior:
 - A provider conformance test exercises the `ChainAdapter` contract with fake adapters.
 - The existing transfer, mint, and attestation tests continue to pass unchanged.
 
-The execution slice adds idempotent persistence around the kernel:
+The execution slice adds idempotent persistence and burn recovery around the kernel:
 
-- `executeTransfer` is covered for success, pending replay, minted replay, conflicts, recoverable and failed errors, persistence failures, and concurrent calls.
+- `executeTransfer` is covered for success, pending replay, minted replay, key mismatch, conflicts, progress persistence, recoverable and failed errors, persistence failures, and concurrent calls.
+- `executeTransfer` resumes `burned`, `attesting`, `attested`, and `recoverable` records through `completeMint` when a destination signer is available.
+- The kernel is covered for success, pending, complete-mint, and progress-failure event sequences.
 - `MemoryTransferStore` is exercised through the executor for record create, update, and replay.
 - `FileTransferStore` is covered for atomic create, replacement, deletion, unsafe keys, and persistence across store instances.
 
 ## Non-goals
 
-This slice does not add distributed leases, crash recovery, a reconciler, a CLI, an HTTP API, new chains, or a public provider SDK. Those depend on a stable execution contract and belong in later slices.
+This slice does not add distributed leases, lease renewal, reconciliation of indeterminate burns or mints, a CLI, an HTTP API, new chains, or a public provider SDK. Those depend on a stable execution contract and belong in later slices.
 
 ## Next slices
 
-1. Crash recovery, leases, and resumption from `burning` and `recoverable`.
+1. Leases and reconciliation for `burning` and `minting` records.
 2. An indexer and reconciler over chain events and Iris state.
 3. CLI and HTTP interfaces that drive the same kernel.
 4. A shipped provider conformance package and provider registry.

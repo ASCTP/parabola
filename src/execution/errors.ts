@@ -1,7 +1,11 @@
 import type { TransferResult } from "../types.js";
 import type { TransferRecord } from "./contracts.js";
 
-export type TransferConflictReason = "in_progress" | "recoverable" | "failed";
+export type TransferConflictReason =
+  | "in_progress"
+  | "recoverable"
+  | "failed"
+  | "mismatch";
 
 export class InvalidIdempotencyKeyError extends Error {
   constructor() {
@@ -15,7 +19,11 @@ export class TransferConflictError extends Error {
   readonly record: TransferRecord;
 
   constructor(reason: TransferConflictReason, record: TransferRecord) {
-    super(`Transfer ${record.idempotencyKey} is ${reason}`);
+    super(
+      reason === "mismatch"
+        ? `Transfer ${record.idempotencyKey} does not match the original request`
+        : `Transfer ${record.idempotencyKey} is ${reason}`,
+    );
     this.name = new.target.name;
     this.reason = reason;
     this.record = record;

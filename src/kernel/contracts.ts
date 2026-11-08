@@ -6,9 +6,11 @@ import type {
   ResolveBurnParams,
   ResolvedBurn,
   Signer,
+  TransferMode,
   TransferParams,
   TransferResult,
 } from "../types.js";
+import type { TransferPhase } from "./state.js";
 
 export interface BurnRequest {
   from: ChainId;
@@ -91,8 +93,31 @@ export interface SettlementDependencies {
   fees: FeeAdapter;
 }
 
+export interface TransferProgress {
+  phase: TransferPhase;
+  burnTxHash?: string;
+  attestationHash?: string;
+  mintTxHash?: string;
+  transferMode?: TransferMode;
+  fee?: string;
+}
+
+export type TransferProgressHandler = (
+  progress: TransferProgress,
+) => void | Promise<void>;
+
+export interface TransferRunOptions {
+  onProgress?: TransferProgressHandler;
+}
+
 export interface SettlementKernel {
-  transfer(params: TransferParams): Promise<TransferResult>;
-  completeMint(params: CompleteMintParams): Promise<CompleteMintResult>;
+  transfer(
+    params: TransferParams,
+    options?: TransferRunOptions,
+  ): Promise<TransferResult>;
+  completeMint(
+    params: CompleteMintParams,
+    options?: TransferRunOptions,
+  ): Promise<CompleteMintResult>;
   resolveBurn(params: ResolveBurnParams): Promise<ResolvedBurn>;
 }

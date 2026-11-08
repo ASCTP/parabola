@@ -9,7 +9,9 @@ import type {
   ChainAdapter,
   FeeAdapter,
   SettlementDependencies,
+  TransferProgress,
 } from "../../src/kernel/contracts.js";
+import { TransferProgressError } from "../../src/kernel/errors.js";
 import { createSettlementKernel } from "../../src/kernel/kernel.js";
 import { buildBurnMessage } from "../helpers/cctp-message.js";
 
@@ -221,5 +223,140 @@ describe("settlement kernel", () => {
     expect(result.sourceDomain).toBe(26);
     expect(result.destinationDomain).toBe(27);
     expect(result.forwardRecipient).toBe(FORWARD_RECIPIENT);
+  });
+
+  it("reports durable progress for a successful transfer", async () => {
+    const { deps } = harness();
+    const kernel = createSettlementKernel(deps);
+    const progress: TransferProgress[] = [];
+
+    await kernel.transfer(
+      {
+        from: "arc",
+        to: "stellar",
+        amount: "10",
+        recipient: ARC_RECIPIENT,
+        speed: "standard",
+        signer: ARC_SIGNER,
+        options: { destinationSigner: STELLAR_SIGNER },
+      },
+      {
+        onProgress(event) {
+          progress.push(event);
+        },
+      },
+    );
+
+    expect(progress.map((event) => event.phase)).toEqual([
+      "burning",
+      "burned",
+      "attested",
+      "minting",
+      "minted",
+    ]);
+    expect(progress[0]).toMatchObject({
+      phase: "burning",
+      transferMode: "standard",
+      fee: "0",
+    });
+    expect(progress[1]).toMatchObject({
+      phase: "burned",
+      burnTxHash: "arc-burn",
+    });
+    expect(progress[2]).toMatchObject({
+      phase: "attested",
+      attestationHash: "0xattestation",
+    });
+    expect(progress[4]).toMatchObject({
+      phase: "minted",
+      mintTxHash: "stellar-mint",
+    });
+  });
+
+  it("reports pending progress when no destination signer is provided", async () => {
+    const { deps } = harness();
+    const kernel = createSettlementKernel(deps);
+    const progress: TransferProgress[] = [];
+
+    await kernel.transfer(
+      {
+        from: "arc",
+        to: "stellar",
+        amount: "10",
+        recipient: ARC_RECIPIENT,
+        speed: "standard",
+        signer: ARC_SIGNER,
+      },
+      {
+        onProgress(event) {
+          progress.push(event);
+        },
+      },
+    );
+
+    expect(progress.map((event) => event.phase)).toEqual([
+      "burning",
+      "burned",
+      "attested",
+      "pending",
+    ]);
+  });
+
+  it("aborts after a burn when progress cannot be persisted", async () => {
+    const { deps, calls } = harness();
+    const kernel = createSettlementKernel(deps);
+    const failure = new Error("disk full");
+
+    const err = await kernel
+      .transfer(
+        {
+          from: "arc",
+          to: "stellar",
+          amount: "10",
+          recipient: ARC_RECIPIENT,
+          speed: "standard",
+          signer: ARC_SIGNER,
+          options: { destinationSigner: STELLAR_SIGNER },
+        },
+        {
+          onProgress(event) {
+            if (event.phase === "burned") {
+              throw failure;
+            }
+          },
+        },
+      )
+      .catch((error) => error);
+
+    expect(err).toBeInstanceOf(TransferProgressError);
+    expect(err).toMatchObject({ cause: failure });
+    expect(calls).toEqual(["stellar.check", "arc.burn"]);
+  });
+
+  it("reports durable progress when completing a mint", async () => {
+    const { deps } = harness();
+    const kernel = createSettlementKernel(deps);
+    const progress: TransferProgress[] = [];
+
+    await kernel.completeMint(
+      {
+        from: "arc",
+        to: "stellar",
+        burnTxHash: "arc-burn",
+        signer: STELLAR_SIGNER,
+      },
+      {
+        onProgress(event) {
+          progress.push(event);
+        },
+      },
+    );
+
+    expect(progress.map((event) => event.phase)).toEqual([
+      "attesting",
+      "attested",
+      "minting",
+      "minted",
+    ]);
   });
 });

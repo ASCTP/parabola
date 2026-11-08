@@ -1,5 +1,10 @@
 import type { TransferPhase } from "../kernel/state.js";
-import type { ChainId, Network, TransferResult } from "../types.js";
+import type {
+  ChainId,
+  Network,
+  TransferMode,
+  TransferResult,
+} from "../types.js";
 
 export interface TransferRecord {
   idempotencyKey: string;
@@ -9,6 +14,8 @@ export interface TransferRecord {
   network: Network;
   amount: string;
   recipient: string;
+  transferMode?: TransferMode;
+  fee?: string;
   burnTxHash?: string;
   attestationHash?: string;
   mintTxHash?: string;
