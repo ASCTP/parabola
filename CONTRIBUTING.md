@@ -124,9 +124,16 @@ You do not need funded Arc or Stellar accounts to work on the SDK itself, since 
 parabola/
   src/
     index.ts          # primary exports
-    transfer.ts        # core transfer orchestration (transfer, completeMint, resolveBurn)
+    transfer.ts        # public transfer entry point, delegates to the kernel
     estimate.ts         # fee estimation
     constants.ts        # contract addresses, domain IDs, RPC/Iris URLs
+    kernel/
+      contracts.ts      # provider contracts and settlement interfaces
+      kernel.ts         # chain-agnostic transfer, mint, and resolve orchestration
+      state.ts          # transfer state machine
+      errors.ts         # kernel-level errors
+    providers/
+      default.ts        # Arc, Stellar, and Iris adapters behind the provider contracts
     chains/
       arc.ts            # Arc-specific CCTP logic (viem)
       stellar.ts         # Stellar-specific CCTP logic, CctpForwarder routing (Soroban)
@@ -143,6 +150,8 @@ parabola/
   demos/                 # demo apps: see demos/README.md; wallet-transfer-demo/ is the first
   scripts/               # address verification and smoke test
 ```
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the kernel and provider boundary, and [docs/adr](docs/adr) for the decisions behind it.
 
 Changes to `src/constants.ts` affect every transfer path; see [Code Standards](#code-standards) below before touching contract addresses or domain IDs.
 
@@ -356,3 +365,5 @@ Publishing authenticates via npm's Trusted Publishing (OIDC): npm trusts this ex
 ---
 
 By contributing to Parabola, you agree that your contributions will be licensed under the project's [MIT License](LICENSE).
+
+If Parabola is useful to you, consider starring the repository.
