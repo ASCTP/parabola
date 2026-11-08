@@ -9,6 +9,7 @@ Parabola is a settlement kernel for moving native USDC across CCTP domains. The 
 ## System shape
 
 - `src/kernel/` contains chain-agnostic orchestration, the transfer state machine, kernel errors, and the provider contracts. It performs no network I/O.
+- `src/execution/` contains the durable transfer record, the idempotent executor, and in-memory and local-file stores. It depends on the kernel contract rather than the provider implementations.
 - `src/providers/` contains the default adapters. These wrap the existing Arc, Stellar, and Iris code behind the provider contracts.
 - `src/chains/` contains chain-specific transaction construction and submission.
 - `src/iris/` contains Circle attestation and fee reads.
@@ -20,6 +21,7 @@ Parabola is a settlement kernel for moving native USDC across CCTP domains. The 
 ## Dependency rule
 
 - The kernel depends on contracts, state, errors, protocol constants, and pure utilities. It never imports chain, Iris, HTTP, or runtime I/O.
+- The execution layer depends on the kernel contract and public types. It performs no chain, Iris, or HTTP I/O; the file store is the only runtime I/O in this layer.
 - Providers depend on the kernel contracts. They may import chain, Iris, constants, and utility modules.
 - The public API depends on the kernel and the default providers.
 - No provider imports the kernel implementation.
@@ -44,7 +46,15 @@ This rule is what makes the kernel testable with fake providers and what will le
 
 `minted`, `pending`, `recoverable`, and `failed` are terminal in this slice. An invalid transition throws `InvalidStateTransitionError` with the phase and event.
 
-`recoverable` means the source-chain burn exists but the transfer did not finish. It is the phase that a future executor will persist and resume from.
+`recoverable` means the source-chain burn exists but the transfer did not finish. The executor persists this phase and the recovery hashes.
+
+## Durable execution
+
+`executeTransfer` wraps a `SettlementKernel` with a `TransferStore` keyed by a caller-supplied idempotency key. It creates the record atomically, persists `burning` before calling the kernel, then records `minted`, `pending`, `recoverable`, or `failed` before returning or rethrowing. A repeated key replays the stored result for `minted` or `pending` and raises `TransferConflictError` for every other phase. `TransferError` maps to `recoverable` because the source-chain burn exists. Any other failure maps to `failed`. Signers are never written to the store.
+
+`TransferStore.create` must be atomic. `MemoryTransferStore` is for tests and single-process use. `FileTransferStore` is a single-host reference store with one JSON file per key, atomic creation, and temporary-file rename for updates. It is not a distributed lock, and it does not coordinate writers across processes.
+
+This layer does not yet resume an in-flight kernel call after a crash, collect leases, or drive `completeMint` from `recoverable`. A record left in `burning` by a crash remains a conflict until an operator or a later reconciler resolves it. Those are the next execution slice.
 
 ## Provider contract
 
@@ -67,9 +77,9 @@ The public error classes in `src/errors.ts` remain the contract for callers. The
 
 `KernelError` and `InvalidStateTransitionError` are internal in this slice. They describe programming errors in the state machine, not protocol failures.
 
-## Current slice
+## Current slices
 
-This slice introduces the boundary without changing public behavior:
+The kernel slice introduces the boundary without changing public behavior:
 
 - `transfer`, `completeMint`, and `resolveBurn` delegate to `createSettlementKernel(defaultSettlementDependencies)`.
 - The default adapters call the same Arc, Stellar, and Iris functions as before, with the same arguments.
@@ -77,13 +87,19 @@ This slice introduces the boundary without changing public behavior:
 - A provider conformance test exercises the `ChainAdapter` contract with fake adapters.
 - The existing transfer, mint, and attestation tests continue to pass unchanged.
 
+The execution slice adds idempotent persistence around the kernel:
+
+- `executeTransfer` is covered for success, pending replay, minted replay, conflicts, recoverable and failed errors, persistence failures, and concurrent calls.
+- `MemoryTransferStore` is exercised through the executor for record create, update, and replay.
+- `FileTransferStore` is covered for atomic create, replacement, deletion, unsafe keys, and persistence across store instances.
+
 ## Non-goals
 
-This slice does not add persistence, idempotency, a CLI, an HTTP API, a reconciler, new chains, or a public provider SDK. Those depend on a stable kernel contract and belong in later slices.
+This slice does not add distributed leases, crash recovery, a reconciler, a CLI, an HTTP API, new chains, or a public provider SDK. Those depend on a stable execution contract and belong in later slices.
 
 ## Next slices
 
-1. Durable execution with state stores, idempotency keys, locking, and crash recovery.
+1. Crash recovery, leases, and resumption from `burning` and `recoverable`.
 2. An indexer and reconciler over chain events and Iris state.
 3. CLI and HTTP interfaces that drive the same kernel.
 4. A shipped provider conformance package and provider registry.
