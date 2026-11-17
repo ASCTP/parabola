@@ -6,6 +6,7 @@ export default defineConfig({
     "src/execution/index.ts",
     "src/indexer/index.ts",
     "src/runtime.ts",
+    "src/cli-entry.ts",
   ],
   format: ["esm", "cjs"],
   dts: true,

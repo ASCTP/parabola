@@ -17,6 +17,9 @@
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "parabola": "./dist/cli-entry.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
