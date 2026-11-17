@@ -1,3 +1,4 @@
+import { createApiServer } from "./api.js";
 import { FileTransferStore } from "./execution/file-store.js";
 import { FileIndexerCursorStore } from "./indexer/cursor.js";
 import { createSettlementRuntime } from "./runtime.js";
@@ -26,6 +27,7 @@ Commands:
   reconcile  Apply burn, attestation, or mint evidence to a record
   resolve    Read what a burn has already committed to
   sync       Advance indexer cursors once or continuously
+  serve      Start the HTTP operations API
 
 Common options:
   --store-dir <path>      Transfer store directory (default: ${DEFAULT_STORE_DIR})
@@ -54,6 +56,12 @@ sync:
   --no-stellar-mints      Disable Stellar mint indexing
   --watch                 Keep running
   --interval <ms>         Watch interval (default: ${DEFAULT_INTERVAL_MS})
+
+serve:
+  --cursor-dir <path>     Cursor store directory (default: ${DEFAULT_CURSOR_DIR})
+  --host <name>           Bind address (default: 127.0.0.1)
+  --port <n>              Bind port (default: 8787)
+  --token <value>         Bearer token, or set PARABOLA_API_TOKEN
 `;
 
 interface ParsedArgs {
@@ -467,6 +475,48 @@ async function syncCommand(
   return 0;
 }
 
+async function serveCommand(
+  parsed: ParsedArgs,
+  io: CliIo,
+): Promise<number> {
+  assertKnownFlags(parsed, [
+    "store-dir",
+    "cursor-dir",
+    "host",
+    "port",
+    "token",
+  ]);
+
+  const store = new FileTransferStore(
+    stringFlag(parsed, "store-dir", DEFAULT_STORE_DIR) as string,
+  );
+  const cursorStore = new FileIndexerCursorStore(
+    stringFlag(parsed, "cursor-dir", DEFAULT_CURSOR_DIR) as string,
+  );
+  const api = createApiServer({
+    store,
+    cursorStore,
+    host: stringFlag(parsed, "host", "127.0.0.1"),
+    port: integerFlag(parsed, "port", 8787) as number,
+    token: stringFlag(parsed, "token", process.env.PARABOLA_API_TOKEN),
+  });
+
+  const address = await api.listen();
+  write(io, `Listening on ${address.url}`);
+
+  await new Promise<void>((resolve) => {
+    const shutdown = () => {
+      process.off("SIGINT", shutdown);
+      process.off("SIGTERM", shutdown);
+      void api.close().finally(resolve);
+    };
+    process.once("SIGINT", shutdown);
+    process.once("SIGTERM", shutdown);
+  });
+
+  return 0;
+}
+
 export async function main(
   argv: string[],
   io: CliIo = { stdout: process.stdout, stderr: process.stderr },
@@ -492,6 +542,8 @@ export async function main(
         return await resolveCommand(parsed, io);
       case "sync":
         return await syncCommand(parsed, io);
+      case "serve":
+        return await serveCommand(parsed, io);
       default:
         throw new Error(`Unknown command: ${command}`);
     }
