@@ -18,6 +18,7 @@ import {
   InvalidIndexerRangeError,
   InvalidLedgerRangeError,
 } from "./indexer/errors.js";
+import type { SettlementMetrics } from "./observability.js";
 import {
   createSettlementRuntime,
   type SettlementRuntime,
@@ -41,6 +42,13 @@ export type ApiRuntime = Pick<
   | "syncStellarMints"
 >;
 
+export interface ApiRequestEvent {
+  method: string;
+  route: string;
+  status: number;
+  durationMs: number;
+}
+
 export interface ApiServerOptions {
   store: TransferStore;
   cursorStore: IndexerCursorStore;
@@ -49,6 +57,8 @@ export interface ApiServerOptions {
   port?: number;
   token?: string;
   maxBodyBytes?: number;
+  metrics?: SettlementMetrics;
+  onRequest?: (event: ApiRequestEvent) => void;
 }
 
 export interface ApiAddress {
@@ -248,6 +258,36 @@ function methodNotAllowed(response: ServerResponse): void {
   sendJson(response, 405, { error: "Method not allowed" });
 }
 
+function routeFor(path: string): string {
+  if (path === "/health" || path === "/transfers") {
+    return path;
+  }
+  if (/^\/transfers\/[^/]+$/.test(path)) {
+    return "/transfers/:idempotencyKey";
+  }
+  if (/^\/transfers\/[^/]+\/reconcile$/.test(path)) {
+    return "/transfers/:idempotencyKey/reconcile";
+  }
+  if (/^\/index\/(arc|stellar)\/(burns|mints)$/.test(path)) {
+    return "/index/:chain/:kind";
+  }
+  if (/^\/sync\/(arc|stellar)\/(burns|mints)$/.test(path)) {
+    return "/sync/:chain/:kind";
+  }
+  return "unknown";
+}
+
+function requestPath(request: IncomingMessage): string {
+  try {
+    return new URL(
+      request.url ?? "/",
+      `http://${request.headers.host ?? "localhost"}`,
+    ).pathname;
+  } catch {
+    return "/";
+  }
+}
+
 async function handle(
   request: IncomingMessage,
   response: ServerResponse,
@@ -427,13 +467,42 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
   const port = options.port ?? DEFAULT_PORT;
 
   const server = createServer((request, response) => {
-    void handle(request, response, options, runtime).catch((error) => {
-      if (response.headersSent) {
-        response.destroy();
-        return;
-      }
-      sendJson(response, statusFor(error), { error: messageFor(error) });
-    });
+    const startedAt = Date.now();
+    const method = request.method ?? "GET";
+    const route = routeFor(requestPath(request));
+
+    const observe = () => {
+      const status = response.statusCode;
+      const durationMs = Date.now() - startedAt;
+      options.metrics?.counter("parabola_api_requests_total", 1, {
+        method,
+        route,
+        status: String(status),
+      });
+      options.metrics?.histogram(
+        "parabola_api_request_duration_ms",
+        durationMs,
+        {
+          method,
+          route,
+          status: String(status),
+        },
+      );
+      options.onRequest?.({ method, route, status, durationMs });
+    };
+
+    void handle(request, response, options, runtime).then(
+      observe,
+      (error) => {
+        if (response.headersSent) {
+          response.destroy();
+          observe();
+          return;
+        }
+        sendJson(response, statusFor(error), { error: messageFor(error) });
+        observe();
+      },
+    );
   });
 
   return {

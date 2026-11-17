@@ -1,6 +1,7 @@
 import type { ArcSyncResult } from "./indexer/arc-sync.js";
 import type { IndexerCursorStore } from "./indexer/cursor.js";
 import type { StellarSyncResult } from "./indexer/stellar-sync.js";
+import type { SettlementMetrics } from "./observability.js";
 import type { SettlementRuntime } from "./runtime.js";
 import type { Network } from "./types.js";
 
@@ -41,6 +42,7 @@ export interface IndexerWorkerOptions {
   stellar?: StellarWorkerStreamOptions;
   intervalMs?: number;
   signal?: AbortSignal;
+  metrics?: SettlementMetrics;
   onCycle?: (cycle: WorkerCycleResult) => void;
   onError?: (error: unknown, task: IndexerTaskName) => void;
 }
@@ -196,7 +198,33 @@ export function createIndexerWorker(
   async function runOnce(): Promise<WorkerCycleResult> {
     const startedAt = Date.now();
     const settled = await Promise.allSettled(
-      tasks.map((task) => task.run()),
+      tasks.map(async (task) => {
+        const taskStartedAt = Date.now();
+        try {
+          const result = await task.run();
+          options.metrics?.counter("parabola_indexer_task_total", 1, {
+            task: task.name,
+            status: "ok",
+          });
+          options.metrics?.histogram(
+            "parabola_indexer_task_duration_ms",
+            Date.now() - taskStartedAt,
+            { task: task.name },
+          );
+          return result;
+        } catch (error) {
+          options.metrics?.counter("parabola_indexer_task_total", 1, {
+            task: task.name,
+            status: "error",
+          });
+          options.metrics?.histogram(
+            "parabola_indexer_task_duration_ms",
+            Date.now() - taskStartedAt,
+            { task: task.name },
+          );
+          throw error;
+        }
+      }),
     );
 
     const results: WorkerTaskResult[] = settled.map((outcome, index) => {
@@ -208,9 +236,19 @@ export function createIndexerWorker(
       return { task: task.name, ok: false, error: outcome.reason };
     });
 
+    const finishedAt = Date.now();
+    const failed = results.filter((result) => !result.ok).length;
+    options.metrics?.counter("parabola_indexer_cycle_total", 1, {
+      status: failed === 0 ? "ok" : "partial",
+    });
+    options.metrics?.histogram(
+      "parabola_indexer_cycle_duration_ms",
+      finishedAt - startedAt,
+    );
+
     const cycle: WorkerCycleResult = {
       startedAt,
-      finishedAt: Date.now(),
+      finishedAt,
       tasks: results,
     };
     options.onCycle?.(cycle);

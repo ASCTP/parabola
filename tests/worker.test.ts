@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ArcSyncResult } from "../src/indexer/arc-sync.js";
 import { MemoryIndexerCursorStore } from "../src/indexer/cursor.js";
 import type { StellarSyncResult } from "../src/indexer/stellar-sync.js";
+import { MemoryMetrics } from "../src/observability.js";
 import {
   createIndexerWorker,
   type IndexerWorker,
@@ -94,6 +95,35 @@ describe("indexer worker", () => {
       expect.objectContaining({
         network: "mainnet",
         startLedger: 1,
+      }),
+    );
+  });
+
+  it("records task and cycle metrics", async () => {
+    const metrics = new MemoryMetrics();
+    const worker = createIndexerWorker(options({ metrics }));
+
+    await worker.runOnce();
+
+    const samples = metrics.snapshot();
+    expect(
+      samples.filter(
+        (sample) =>
+          sample.name === "parabola_indexer_task_total" &&
+          sample.labels?.status === "ok",
+      ),
+    ).toHaveLength(4);
+    expect(
+      samples.filter(
+        (sample) => sample.name === "parabola_indexer_task_duration_ms",
+      ),
+    ).toHaveLength(4);
+    expect(samples).toContainEqual(
+      expect.objectContaining({
+        name: "parabola_indexer_cycle_total",
+        kind: "counter",
+        value: 1,
+        labels: { status: "ok" },
       }),
     );
   });

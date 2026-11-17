@@ -2,10 +2,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createApiServer,
   type ApiAddress,
+  type ApiRequestEvent,
   type ApiRuntime,
   type ApiServer,
   type ApiServerOptions,
 } from "../src/api.js";
+import { MemoryMetrics } from "../src/observability.js";
 import type { TransferRecord } from "../src/execution/contracts.js";
 import { MemoryTransferStore } from "../src/execution/memory-store.js";
 import { MemoryIndexerCursorStore } from "../src/indexer/cursor.js";
@@ -130,6 +132,39 @@ describe("HTTP operations API", () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ status: "ok" });
+  });
+
+  it("records request metrics and events", async () => {
+    const metrics = new MemoryMetrics();
+    const events: ApiRequestEvent[] = [];
+    const { address } = await start({
+      metrics,
+      onRequest: (event) => events.push(event),
+    });
+
+    await getJson(`${address.url}/health`);
+
+    expect(metrics.snapshot()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "parabola_api_requests_total",
+          kind: "counter",
+          value: 1,
+          labels: { method: "GET", route: "/health", status: "200" },
+        }),
+        expect.objectContaining({
+          name: "parabola_api_request_duration_ms",
+          kind: "histogram",
+          labels: { method: "GET", route: "/health", status: "200" },
+        }),
+      ]),
+    );
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      method: "GET",
+      route: "/health",
+      status: 200,
+    });
   });
 
   it("rejects unauthenticated operations", async () => {

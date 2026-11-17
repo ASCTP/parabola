@@ -45,6 +45,11 @@
       "types": "./dist/api.d.ts",
       "import": "./dist/api.js",
       "require": "./dist/api.cjs"
+    },
+    "./observability": {
+      "types": "./dist/observability.d.ts",
+      "import": "./dist/observability.js",
+      "require": "./dist/observability.cjs"
     }
   },
   "files": [

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as execution from "../src/execution/index.js";
 import * as indexer from "../src/indexer/index.js";
+import * as observability from "../src/observability.js";
 
 describe("package subpath exports", () => {
   it("exposes the durable execution surface", () => {
@@ -17,5 +18,12 @@ describe("package subpath exports", () => {
     expect(indexer.syncStellarBurns).toBeTypeOf("function");
     expect(indexer.MemoryIndexerCursorStore).toBeTypeOf("function");
     expect(indexer.FileIndexerCursorStore).toBeTypeOf("function");
+  });
+
+  it("exposes the observability surface", () => {
+    expect(observability.MemoryMetrics).toBeTypeOf("function");
+    expect(observability.MemoryLogger).toBeTypeOf("function");
+    expect(observability.JsonLogger).toBeTypeOf("function");
+    expect(observability.noopMetrics).toBeDefined();
   });
 });
