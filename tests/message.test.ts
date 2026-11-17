@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { pad } from "viem";
-import { decodeCctpMessage } from "../src/utils/message.js";
+import {
+  decodeCctpBurnBody,
+  decodeCctpMessage,
+} from "../src/utils/message.js";
 import { decodeStellarForwardHook, encodeStellarForwardHook, stellarAddressToBytes32 } from "../src/utils/encoding.js";
 import { ARC_TESTNET, STELLAR_TESTNET } from "../src/constants.js";
 
@@ -33,6 +36,30 @@ const LIVE_TESTNET_BURN_MESSAGE =
   "47435933504c475a515a57564b51454c573747434851564c565a47524d4749355234484f445836515a4d3745544a5350484246564a505932";
 
 const LIVE_TESTNET_FORWARD_RECIPIENT = "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2";
+const LIVE_TESTNET_BURN_BODY = `0x${LIVE_TESTNET_BURN_MESSAGE.slice(2 + 148 * 2)}`;
+
+describe("decodeCctpBurnBody", () => {
+  it("decodes the body carried by a destination-chain MessageReceived event", () => {
+    const decoded = decodeCctpBurnBody(LIVE_TESTNET_BURN_BODY);
+
+    expect(decoded.burnBodyVersion).toBe(1);
+    expect(decoded.burnToken.toLowerCase()).toBe(
+      paddedAddress(ARC_TESTNET.usdc).toLowerCase(),
+    );
+    expect(decoded.mintRecipient).toBe(
+      stellarAddressToBytes32(STELLAR_TESTNET.cctpForwarder),
+    );
+    expect(decoded.amountRaw).toBe(1_000_000n);
+    expect(decoded.hookData).not.toBeNull();
+    expect(decoded.forwardRecipient).toBe(LIVE_TESTNET_FORWARD_RECIPIENT);
+  });
+
+  it("rejects a body shorter than a V2 burn body", () => {
+    expect(() => decodeCctpBurnBody("0x00000001")).toThrow(
+      /shorter than the 228-byte/,
+    );
+  });
+});
 
 describe("decodeCctpMessage", () => {
   it("decodes a live testnet burn message at Circle's documented V2 offsets", () => {

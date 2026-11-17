@@ -35,8 +35,36 @@ const BODY_OFFSET = {
   hookData: 376,
 } as const;
 
+const BURN_BODY_OFFSET = {
+  version: 0,
+  burnToken: 4,
+  mintRecipient: 36,
+  amount: 68,
+  messageSender: 100,
+  maxFee: 132,
+  feeExecuted: 164,
+  expirationBlock: 196,
+  hookData: 228,
+} as const;
+
 /** Every CCTP V2 message header is this long, and every burn body at least this long. */
 const V2_BURN_MESSAGE_MINIMUM_LENGTH = BODY_OFFSET.hookData;
+const V2_BURN_BODY_MINIMUM_LENGTH = BURN_BODY_OFFSET.hookData;
+
+export interface CctpBurnBody {
+  burnBodyVersion: number;
+  burnToken: `0x${string}`;
+  mintRecipient: `0x${string}`;
+  /** Amount burned, in canonical six-decimal base units. */
+  amountRaw: bigint;
+  messageSender: `0x${string}`;
+  maxFeeRaw: bigint;
+  feeExecutedRaw: bigint;
+  expirationBlockRaw: bigint;
+  hookData: `0x${string}` | null;
+  /** Stellar account encoded in a forward hook, when present and decodable. */
+  forwardRecipient: string | null;
+}
 
 export interface CctpBurnMessage {
   version: number;
@@ -78,6 +106,37 @@ function hexToBuffer(hex: string): Buffer {
 
 function readBytes32(raw: Buffer, offset: number): `0x${string}` {
   return `0x${raw.subarray(offset, offset + 32).toString("hex")}`;
+}
+
+/**
+ * Decodes the burn body carried inside a CCTP V2 message. Destination-chain events such as
+ * `MessageReceived` expose only this body, without the 148-byte message header, so it has
+ * its own offsets and length check.
+ */
+export function decodeCctpBurnBody(body: string): CctpBurnBody {
+  const raw = hexToBuffer(body);
+  if (raw.length < V2_BURN_BODY_MINIMUM_LENGTH) {
+    throw new Error(
+      `CCTP burn body is ${raw.length} bytes, shorter than the ${V2_BURN_BODY_MINIMUM_LENGTH}-byte V2 burn body minimum`,
+    );
+  }
+
+  const hookBytes = raw.subarray(BURN_BODY_OFFSET.hookData);
+  const hookData =
+    hookBytes.length > 0 ? (`0x${hookBytes.toString("hex")}` as `0x${string}`) : null;
+
+  return {
+    burnBodyVersion: raw.readUInt32BE(BURN_BODY_OFFSET.version),
+    burnToken: readBytes32(raw, BURN_BODY_OFFSET.burnToken),
+    mintRecipient: readBytes32(raw, BURN_BODY_OFFSET.mintRecipient),
+    amountRaw: BigInt(readBytes32(raw, BURN_BODY_OFFSET.amount)),
+    messageSender: readBytes32(raw, BURN_BODY_OFFSET.messageSender),
+    maxFeeRaw: BigInt(readBytes32(raw, BURN_BODY_OFFSET.maxFee)),
+    feeExecutedRaw: BigInt(readBytes32(raw, BURN_BODY_OFFSET.feeExecuted)),
+    expirationBlockRaw: BigInt(readBytes32(raw, BURN_BODY_OFFSET.expirationBlock)),
+    hookData,
+    forwardRecipient: hookData ? (decodeStellarForwardHook(hookData) ?? null) : null,
+  };
 }
 
 /**
