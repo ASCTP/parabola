@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { AttestationNotReadyError, TransferError } from "../../src/errors.js";
 import type { SettlementKernel } from "../../src/kernel/contracts.js";
 import { TransferProgressError } from "../../src/kernel/errors.js";
@@ -7,6 +7,7 @@ import type { TransferRecord, TransferStore } from "../../src/execution/contract
 import {
   InvalidIdempotencyKeyError,
   TransferConflictError,
+  TransferLeaseLostError,
   TransferPersistenceError,
 } from "../../src/execution/errors.js";
 import { executeTransfer } from "../../src/execution/executor.js";
@@ -28,7 +29,11 @@ const PARAMS = {
   amount: "10",
   recipient: RECIPIENT,
   speed: "standard",
-  signer: { walletClient: {} },
+  signer: {
+    walletClient: {
+      account: { address: "0x1111111111111111111111111111111111111111" },
+    },
+  },
 } as unknown as TransferParams;
 
 const PARAMS_WITH_DESTINATION = {
@@ -83,14 +88,32 @@ function failingPut(phase: TransferPhase): TransferStore {
   const inner = new MemoryTransferStore();
   return {
     get: (key) => inner.get(key),
+    list: () => inner.list(),
     create: (value) => inner.create(value),
     delete: (key) => inner.delete(key),
+    claim: (key, owner, leaseMs) => inner.claim(key, owner, leaseMs),
+    renew: (key, owner, leaseMs) => inner.renew(key, owner, leaseMs),
+    release: (key, owner) => inner.release(key, owner),
     async put(value) {
       if (value.phase === phase) {
         throw new Error("disk full");
       }
       await inner.put(value);
     },
+  };
+}
+
+function losingRenew(): TransferStore {
+  const inner = new MemoryTransferStore();
+  return {
+    get: (key) => inner.get(key),
+    list: () => inner.list(),
+    create: (value) => inner.create(value),
+    put: (value) => inner.put(value),
+    delete: (key) => inner.delete(key),
+    claim: (key, owner, leaseMs) => inner.claim(key, owner, leaseMs),
+    renew: async () => false,
+    release: (key, owner) => inner.release(key, owner),
   };
 }
 
@@ -133,6 +156,7 @@ describe("durable transfer executor", () => {
       network: "mainnet",
       amount: "10",
       recipient: RECIPIENT,
+      sourceAddress: "0x1111111111111111111111111111111111111111",
       burnTxHash: "burn-1",
       attestationHash: "0xattestation",
       mintTxHash: "mint-1",
@@ -152,6 +176,27 @@ describe("durable transfer executor", () => {
     );
 
     expect(outcome.record.network).toBe("mainnet");
+  });
+
+  it("records the Stellar public key as the source address", async () => {
+    const store = new MemoryTransferStore();
+    const params = {
+      from: "stellar",
+      to: "arc",
+      amount: "10",
+      recipient: "0x2222222222222222222222222222222222222222",
+      speed: "standard",
+      signer: { publicKey: "GSOURCE" },
+    } as unknown as TransferParams;
+
+    const outcome = await executeTransfer(
+      kernel(async () => result()),
+      store,
+      params,
+      { idempotencyKey: "order-2" },
+    );
+
+    expect(outcome.record.sourceAddress).toBe("GSOURCE");
   });
 
   it("replays a pending result without repeating the burn", async () => {
@@ -407,6 +452,31 @@ describe("durable transfer executor", () => {
     expect(calls).toBe(0);
   });
 
+  it("rejects reuse of a key from a different source account", async () => {
+    const store = new MemoryTransferStore();
+    await store.create(
+      record({
+        phase: "minted",
+        sourceAddress: "0x1111111111111111111111111111111111111111",
+        result: result(),
+      }),
+    );
+    const otherSource = {
+      ...PARAMS,
+      signer: {
+        walletClient: {
+          account: { address: "0x2222222222222222222222222222222222222222" },
+        },
+      },
+    } as unknown as TransferParams;
+
+    await expect(
+      executeTransfer(kernel(async () => result()), store, otherSource, {
+        idempotencyKey: "order-1",
+      }),
+    ).rejects.toMatchObject({ reason: "mismatch" });
+  });
+
   it.each(["burned", "attesting", "attested", "recoverable"] as const)(
     "resumes a %s transfer through completeMint",
     async (phase) => {
@@ -594,5 +664,100 @@ describe("durable transfer executor", () => {
     expect(err).toMatchObject({
       record: { phase: "burned", burnTxHash: "burn-9" },
     });
+  });
+
+  it("releases the lease after a successful transfer", async () => {
+    const store = new MemoryTransferStore();
+
+    await executeTransfer(
+      kernel(async () => result()),
+      store,
+      PARAMS,
+      { idempotencyKey: "order-1" },
+    );
+
+    await expect(store.claim("order-1", "other", 60_000)).resolves.toMatchObject(
+      { status: "claimed" },
+    );
+  });
+
+  it("releases the lease after a failed transfer", async () => {
+    const store = new MemoryTransferStore();
+
+    await executeTransfer(
+      kernel(async () => {
+        throw new Error("burn rejected");
+      }),
+      store,
+      PARAMS,
+      { idempotencyKey: "order-1" },
+    ).catch(() => undefined);
+
+    await expect(store.claim("order-1", "other", 60_000)).resolves.toMatchObject(
+      { status: "claimed" },
+    );
+  });
+
+  it("blocks a resumable transfer while another owner holds the lease", async () => {
+    const store = new MemoryTransferStore();
+    await store.create(record({ phase: "recoverable", burnTxHash: "burn-9" }));
+    await store.claim("order-1", "other", 60_000);
+    let mintCalls = 0;
+
+    const err = await executeTransfer(
+      kernel(
+        async () => result(),
+        async () => {
+          mintCalls += 1;
+          return { mintTxHash: "mint-9", attestationHash: "0xattestation" };
+        },
+      ),
+      store,
+      PARAMS_WITH_DESTINATION,
+      { idempotencyKey: "order-1", owner: "me" },
+    ).catch((error) => error);
+
+    expect(err).toBeInstanceOf(TransferConflictError);
+    expect(err).toMatchObject({ reason: "in_progress" });
+    expect(mintCalls).toBe(0);
+  });
+
+  it("renews the lease as progress is persisted", async () => {
+    const store = new MemoryTransferStore();
+    const renew = vi.spyOn(store, "renew");
+    const client = kernel(async (_params, runOptions) => {
+      await runOptions?.onProgress?.({
+        phase: "burned",
+        burnTxHash: "burn-1",
+      });
+      return result();
+    });
+
+    await executeTransfer(client, store, PARAMS, {
+      idempotencyKey: "order-1",
+    });
+
+    expect(renew).toHaveBeenCalled();
+  });
+
+  it("stops when the lease is lost during progress", async () => {
+    const store = losingRenew();
+    const client = kernel(async (_params, runOptions) => {
+      try {
+        await runOptions?.onProgress?.({
+          phase: "burned",
+          burnTxHash: "burn-1",
+        });
+      } catch (err) {
+        throw new TransferProgressError(err);
+      }
+      return result();
+    });
+
+    const err = await executeTransfer(client, store, PARAMS, {
+      idempotencyKey: "order-1",
+    }).catch((error) => error);
+
+    expect(err).toBeInstanceOf(TransferLeaseLostError);
   });
 });

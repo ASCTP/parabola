@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { TransferError } from "../errors.js";
 import type {
   SettlementKernel,
@@ -14,16 +15,33 @@ import type { TransferRecord, TransferStore } from "./contracts.js";
 import {
   InvalidIdempotencyKeyError,
   TransferConflictError,
+  TransferLeaseLostError,
   TransferPersistenceError,
 } from "./errors.js";
+import { resultFromRecord } from "./record.js";
+
+const DEFAULT_LEASE_MS = 15 * 60_000;
 
 export interface ExecuteTransferOptions {
   idempotencyKey: string;
+  owner?: string;
+  leaseMs?: number;
 }
 
 export interface ExecuteTransferOutcome {
   record: TransferRecord;
   result: TransferResult;
+}
+
+function sourceAddressFor(params: TransferParams): string | undefined {
+  if (params.from === "arc") {
+    const account = params.signer.walletClient.account;
+    if (!account) {
+      return undefined;
+    }
+    return typeof account === "string" ? account : account.address;
+  }
+  return params.signer.publicKey;
 }
 
 function isResumable(record: TransferRecord): boolean {
@@ -33,6 +51,20 @@ function isResumable(record: TransferRecord): boolean {
       record.phase === "attesting" ||
       record.phase === "attested" ||
       record.phase === "recoverable")
+  );
+}
+
+function sameSourceAddress(
+  record: TransferRecord,
+  params: TransferParams,
+): boolean {
+  const sourceAddress = sourceAddressFor(params);
+  if (record.sourceAddress === undefined || sourceAddress === undefined) {
+    return true;
+  }
+  return (
+    record.sourceAddress === sourceAddress ||
+    record.sourceAddress.toLowerCase() === sourceAddress.toLowerCase()
   );
 }
 
@@ -46,31 +78,11 @@ function assertSameTransfer(
     record.to !== params.to ||
     record.network !== network ||
     record.amount !== params.amount ||
-    record.recipient !== params.recipient
+    record.recipient !== params.recipient ||
+    !sameSourceAddress(record, params)
   ) {
     throw new TransferConflictError("mismatch", record);
   }
-}
-
-function resultFromRecord(record: TransferRecord): TransferResult | undefined {
-  if (record.result) {
-    return record.result;
-  }
-  if (
-    record.burnTxHash === undefined ||
-    (record.phase !== "minted" && record.phase !== "pending")
-  ) {
-    return undefined;
-  }
-  return {
-    status: record.phase === "minted" ? "success" : "pending",
-    transferMode: record.transferMode ?? "standard",
-    burnTxHash: record.burnTxHash,
-    attestationHash: record.attestationHash ?? "",
-    mintTxHash: record.mintTxHash ?? "",
-    fee: record.fee ?? "0",
-    durationMs: record.updatedAt - record.createdAt,
-  };
 }
 
 async function replayTransfer(
@@ -120,8 +132,14 @@ function applyProgress(
 function progressWriter(
   store: TransferStore,
   record: TransferRecord,
+  owner: string,
+  leaseMs: number,
 ): NonNullable<TransferRunOptions["onProgress"]> {
   return async (progress) => {
+    const renewed = await store.renew(record.idempotencyKey, owner, leaseMs);
+    if (!renewed) {
+      throw new TransferLeaseLostError(record.idempotencyKey);
+    }
     applyProgress(record, progress);
     try {
       await store.put(record);
@@ -141,7 +159,10 @@ function rethrowProgressError(
   record: TransferRecord,
 ): void {
   if (err instanceof TransferProgressError) {
-    if (err.cause instanceof TransferPersistenceError) {
+    if (
+      err.cause instanceof TransferPersistenceError ||
+      err.cause instanceof TransferLeaseLostError
+    ) {
       throw err.cause;
     }
     throw new TransferPersistenceError(
@@ -175,6 +196,8 @@ async function resumeTransfer(
   store: TransferStore,
   record: TransferRecord,
   params: TransferParams,
+  owner: string,
+  leaseMs: number,
 ): Promise<ExecuteTransferOutcome> {
   const destinationSigner = params.options?.destinationSigner;
   if (!destinationSigner) {
@@ -193,7 +216,7 @@ async function resumeTransfer(
   let completed;
   try {
     completed = await kernel.completeMint(resumeParams, {
-      onProgress: progressWriter(store, record),
+      onProgress: progressWriter(store, record, owner, leaseMs),
     });
   } catch (err) {
     rethrowProgressError(err, record);
@@ -234,6 +257,31 @@ async function resumeTransfer(
   return { record, result };
 }
 
+async function resolveClaimedRecord(
+  kernel: SettlementKernel,
+  store: TransferStore,
+  record: TransferRecord,
+  params: TransferParams,
+  owner: string,
+  leaseMs: number,
+): Promise<ExecuteTransferOutcome> {
+  assertSameTransfer(record, params);
+  const replayed = resultFromRecord(record);
+  if (replayed) {
+    return replayTransfer(store, record, replayed);
+  }
+  if (isResumable(record)) {
+    return resumeTransfer(kernel, store, record, params, owner, leaseMs);
+  }
+  if (record.phase === "recoverable") {
+    throw new TransferConflictError("recoverable", record);
+  }
+  if (record.phase === "failed") {
+    throw new TransferConflictError("failed", record);
+  }
+  throw new TransferConflictError("in_progress", record);
+}
+
 export async function executeTransfer(
   kernel: SettlementKernel,
   store: TransferStore,
@@ -244,115 +292,134 @@ export async function executeTransfer(
   if (!idempotencyKey) {
     throw new InvalidIdempotencyKeyError();
   }
+  const owner = options.owner ?? randomUUID();
+  const leaseMs =
+    options.leaseMs ??
+    Math.max(DEFAULT_LEASE_MS, (params.options?.pollTimeout ?? 0) + 60_000);
 
-  const existing = await store.get(idempotencyKey);
-  if (existing) {
-    assertSameTransfer(existing, params);
-    const replayed = resultFromRecord(existing);
+  const observed = await store.get(idempotencyKey);
+  if (observed) {
+    assertSameTransfer(observed, params);
+    const replayed = resultFromRecord(observed);
     if (replayed) {
-      return replayTransfer(store, existing, replayed);
+      return replayTransfer(store, observed, replayed);
     }
-    if (isResumable(existing)) {
-      return resumeTransfer(kernel, store, existing, params);
-    }
-    if (existing.phase === "recoverable") {
-      throw new TransferConflictError("recoverable", existing);
-    }
-    if (existing.phase === "failed") {
-      throw new TransferConflictError("failed", existing);
-    }
-    throw new TransferConflictError("in_progress", existing);
   }
 
-  const now = Date.now();
-  const record: TransferRecord = {
-    idempotencyKey,
-    phase: "planned",
-    from: params.from,
-    to: params.to,
-    network: params.network ?? "mainnet",
-    amount: params.amount,
-    recipient: params.recipient,
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  if (!(await store.create(record))) {
-    const raced = await store.get(idempotencyKey);
-    if (!raced) {
+  const claim = await store.claim(idempotencyKey, owner, leaseMs);
+  if (claim.status === "busy") {
+    const record = claim.record ?? (await store.get(idempotencyKey));
+    if (!record) {
       throw new Error(`Transfer ${idempotencyKey} disappeared from the store`);
     }
-    assertSameTransfer(raced, params);
-    const replayed = resultFromRecord(raced);
-    if (replayed) {
-      return replayTransfer(store, raced, replayed);
+    assertSameTransfer(record, params);
+    if (
+      record.result &&
+      (record.phase === "minted" || record.phase === "pending")
+    ) {
+      return { record, result: record.result };
     }
-    if (isResumable(raced)) {
-      return resumeTransfer(kernel, store, raced, params);
-    }
-    if (raced.phase === "recoverable") {
-      throw new TransferConflictError("recoverable", raced);
-    }
-    if (raced.phase === "failed") {
-      throw new TransferConflictError("failed", raced);
-    }
-    throw new TransferConflictError("in_progress", raced);
+    throw new TransferConflictError("in_progress", record);
   }
 
-  record.phase = "burning";
-  record.updatedAt = Date.now();
   try {
-    await store.put(record);
-  } catch (err) {
-    throw new TransferPersistenceError(
-      "Failed to persist transfer start",
-      record,
-      undefined,
-      { cause: err },
-    );
-  }
+    if (claim.record) {
+      return await resolveClaimedRecord(
+        kernel,
+        store,
+        claim.record,
+        params,
+        owner,
+        leaseMs,
+      );
+    }
 
-  let result: TransferResult;
-  try {
-    result = await kernel.transfer(params, {
-      onProgress: progressWriter(store, record),
-    });
-  } catch (err) {
-    rethrowProgressError(err, record);
-    if (err instanceof TransferError) {
-      record.phase = "recoverable";
-      record.burnTxHash = err.burnTxHash;
-      if (err.attestationHash !== undefined) {
-        record.attestationHash = err.attestationHash;
+    const now = Date.now();
+    const record: TransferRecord = {
+      idempotencyKey,
+      phase: "planned",
+      from: params.from,
+      to: params.to,
+      network: params.network ?? "mainnet",
+      amount: params.amount,
+      recipient: params.recipient,
+      sourceAddress: sourceAddressFor(params),
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    if (!(await store.create(record))) {
+      const raced = await store.get(idempotencyKey);
+      if (!raced) {
+        throw new Error(`Transfer ${idempotencyKey} disappeared from the store`);
       }
-      record.error = err.message;
-    } else {
-      record.phase = "failed";
-      record.error = err instanceof Error ? err.message : String(err);
+      return await resolveClaimedRecord(
+        kernel,
+        store,
+        raced,
+        params,
+        owner,
+        leaseMs,
+      );
     }
+
+    record.phase = "burning";
     record.updatedAt = Date.now();
-    await persistFailure(store, record);
-    throw err;
+    try {
+      await store.put(record);
+    } catch (err) {
+      throw new TransferPersistenceError(
+        "Failed to persist transfer start",
+        record,
+        undefined,
+        { cause: err },
+      );
+    }
+
+    let result: TransferResult;
+    try {
+      result = await kernel.transfer(params, {
+        onProgress: progressWriter(store, record, owner, leaseMs),
+      });
+    } catch (err) {
+      rethrowProgressError(err, record);
+      if (err instanceof TransferError) {
+        record.phase = "recoverable";
+        record.burnTxHash = err.burnTxHash;
+        if (err.attestationHash !== undefined) {
+          record.attestationHash = err.attestationHash;
+        }
+        record.error = err.message;
+      } else {
+        record.phase = "failed";
+        record.error = err instanceof Error ? err.message : String(err);
+      }
+      record.updatedAt = Date.now();
+      await persistFailure(store, record);
+      throw err;
+    }
+
+    record.phase = result.status === "success" ? "minted" : "pending";
+    record.result = result;
+    record.burnTxHash = result.burnTxHash;
+    record.attestationHash = result.attestationHash || undefined;
+    record.mintTxHash = result.mintTxHash || undefined;
+    record.updatedAt = Date.now();
+    delete record.error;
+
+    try {
+      await store.put(record);
+    } catch (err) {
+      throw new TransferPersistenceError(
+        "Failed to persist completed transfer state",
+        record,
+        result,
+        { cause: err },
+      );
+    }
+
+    return { record, result };
+  } finally {
+    await store.release(idempotencyKey, owner).catch(() => undefined);
   }
-
-  record.phase = result.status === "success" ? "minted" : "pending";
-  record.result = result;
-  record.burnTxHash = result.burnTxHash;
-  record.attestationHash = result.attestationHash || undefined;
-  record.mintTxHash = result.mintTxHash || undefined;
-  record.updatedAt = Date.now();
-  delete record.error;
-
-  try {
-    await store.put(record);
-  } catch (err) {
-    throw new TransferPersistenceError(
-      "Failed to persist completed transfer state",
-      record,
-      result,
-      { cause: err },
-    );
-  }
-
-  return { record, result };
 }

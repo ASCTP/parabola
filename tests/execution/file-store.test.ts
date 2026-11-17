@@ -94,6 +94,24 @@ describe("file transfer store", () => {
     await expect(readdir(nested)).resolves.toHaveLength(1);
   });
 
+  it("lists records across store instances and ignores lease files", async () => {
+    const store = new FileTransferStore(directory);
+    await store.create(record({ idempotencyKey: "order-2", createdAt: 2 }));
+    await store.create(record({ idempotencyKey: "order-1", createdAt: 1 }));
+    await store.claim("order-1", "owner-a", 60_000);
+
+    await expect(new FileTransferStore(directory).list()).resolves.toMatchObject([
+      { idempotencyKey: "order-1" },
+      { idempotencyKey: "order-2" },
+    ]);
+  });
+
+  it("returns no records when the directory does not exist", async () => {
+    const store = new FileTransferStore(join(directory, "missing"));
+
+    await expect(store.list()).resolves.toEqual([]);
+  });
+
   it("allows exactly one concurrent create for the same key", async () => {
     const store = new FileTransferStore(directory);
 
@@ -114,5 +132,73 @@ describe("file transfer store", () => {
     await writeFile(path, "{", "utf8");
 
     await expect(store.get("order-1")).rejects.toBeInstanceOf(SyntaxError);
+  });
+
+  it("claims a key and blocks another store instance", async () => {
+    const store = new FileTransferStore(directory);
+    await store.create(record());
+
+    await expect(store.claim("order-1", "owner-a", 60_000)).resolves.toMatchObject(
+      { status: "claimed", record: { idempotencyKey: "order-1" } },
+    );
+    await expect(
+      new FileTransferStore(directory).claim("order-1", "owner-b", 60_000),
+    ).resolves.toMatchObject({ status: "busy" });
+  });
+
+  it("renews a lease only for its owner", async () => {
+    const store = new FileTransferStore(directory);
+    await store.claim("order-1", "owner-a", 60_000);
+
+    await expect(store.renew("order-1", "owner-a", 60_000)).resolves.toBe(true);
+    await expect(store.renew("order-1", "owner-b", 60_000)).resolves.toBe(false);
+  });
+
+  it("releases a lease and allows another owner to claim", async () => {
+    const store = new FileTransferStore(directory);
+    await store.claim("order-1", "owner-a", 60_000);
+
+    await store.release("order-1", "owner-a");
+
+    await expect(store.claim("order-1", "owner-b", 60_000)).resolves.toMatchObject(
+      { status: "claimed" },
+    );
+  });
+
+  it("reclaims an expired lease", async () => {
+    const store = new FileTransferStore(directory);
+    await store.claim("order-1", "owner-a", 0);
+
+    await expect(store.claim("order-1", "owner-b", 60_000)).resolves.toMatchObject(
+      { status: "claimed" },
+    );
+    await expect(store.renew("order-1", "owner-a", 60_000)).resolves.toBe(false);
+  });
+
+  it("serializes concurrent claims across store instances", async () => {
+    const first = new FileTransferStore(directory);
+    const second = new FileTransferStore(directory);
+
+    const claims = await Promise.all([
+      first.claim("order-1", "owner-a", 60_000),
+      second.claim("order-1", "owner-b", 60_000),
+    ]);
+
+    expect(claims.map((claim) => claim.status).sort()).toEqual([
+      "busy",
+      "claimed",
+    ]);
+  });
+
+  it("removes the lease when a record is deleted", async () => {
+    const store = new FileTransferStore(directory);
+    await store.create(record());
+    await store.claim("order-1", "owner-a", 60_000);
+
+    await store.delete("order-1");
+
+    await expect(store.claim("order-1", "owner-b", 60_000)).resolves.toEqual({
+      status: "claimed",
+    });
   });
 });

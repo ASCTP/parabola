@@ -30,6 +30,36 @@ export class TransferConflictError extends Error {
   }
 }
 
+export class TransferNotFoundError extends Error {
+  readonly idempotencyKey: string;
+
+  constructor(idempotencyKey: string) {
+    super(`Transfer ${idempotencyKey} was not found`);
+    this.name = new.target.name;
+    this.idempotencyKey = idempotencyKey;
+  }
+}
+
+export class TransferEvidenceError extends Error {
+  readonly idempotencyKey: string;
+
+  constructor(idempotencyKey: string, message: string) {
+    super(`Transfer ${idempotencyKey} cannot be reconciled: ${message}`);
+    this.name = new.target.name;
+    this.idempotencyKey = idempotencyKey;
+  }
+}
+
+export class TransferLeaseLostError extends Error {
+  readonly idempotencyKey: string;
+
+  constructor(idempotencyKey: string) {
+    super(`Lease for transfer ${idempotencyKey} was lost`);
+    this.name = new.target.name;
+    this.idempotencyKey = idempotencyKey;
+  }
+}
+
 export class TransferPersistenceError extends Error {
   readonly record: TransferRecord;
   readonly result?: TransferResult;
