@@ -21,6 +21,8 @@ Parabola is a settlement kernel for moving native USDC across CCTP domains. The 
 - `src/runtime.ts` composes the default kernel, the durable executor, the reconciler, and the indexers into one operation surface.
 - `src/worker.ts` runs the configured indexer streams once or on an interval, isolates per-stream failures, and records task and cycle metrics.
 - `src/api.ts` serves the operator HTTP API over the same store and cursor contracts.
+- `src/store-server.ts` exposes the store and cursor contracts over HTTP for remote clients.
+- `src/store-http.ts` and `src/http-json.ts` provide the remote store client and shared JSON request handling.
 - `src/cli.ts` and `src/cli-entry.ts` provide the `parabola` operator CLI.
 - `src/observability.ts` defines the metrics and structured logging contracts and reference implementations.
 - `src/webhooks/` contains signed outbound delivery, retry policy, endpoint management, dead-letter replay, replay protection, and memory and file endpoint and delivery stores. It depends on execution record types and observability contracts, not on the kernel or providers.
@@ -74,7 +76,9 @@ When a record has a burn hash and is in `burned`, `attesting`, `attested`, or `r
 
 Every execution claims a lease before it reads, creates, resumes, or mutates a transfer record. A busy lease raises `TransferConflictError` with reason `in_progress`. The executor generates a lease owner per call, renews the lease before each persisted progress event, and releases it in a `finally` block. A lost lease raises `TransferLeaseLostError` and stops the run. Terminal records with a stored result can still be replayed without taking a lease.
 
-The file store serializes claim operations with a short-lived lock directory and stores leases in per-key `.lease` files. Expired leases are reclaimable, and every store instance observes the same lease because the files live beside the records. This is a single-host coordination mechanism. It does not provide multi-host mutual exclusion.
+The file store serializes claim operations with a short-lived lock directory and stores leases in per-key `.lease` files. Expired leases are reclaimable, and every store instance observes the same lease because the files live beside the records. This is a single-host coordination mechanism. It does not provide multi-host mutual exclusion by itself.
+
+`createStoreServer` centralizes a `TransferStore` and an optional `IndexerCursorStore` behind an HTTP protocol. `RemoteTransferStore` and `RemoteIndexerCursorStore` implement the same contracts as clients. Record operations, lease claims, renewals, and releases all run against the server's store, so every client observes the same lease. The server is a single coordination point, not a distributed database. Bearer authentication is optional, and the server is an operator surface that belongs behind an ingress.
 
 A record left in `burning` without a burn hash is indeterminate because the burn may have landed. A record left in `minting` is indeterminate because the mint may have landed. Neither is resumed automatically.
 
@@ -110,7 +114,7 @@ The runtime is exported from `@asctp/parabola/runtime`. The execution and indexe
 
 The CLI wraps the runtime and worker with file-backed stores. `list`, `reconcile`, and `resolve` are one-shot commands. `sync` runs one cycle or watches on an interval. `serve` starts the HTTP API and shuts down cleanly on `SIGINT` or `SIGTERM`. `--json` makes every command machine-readable.
 
-`@asctp/parabola/observability` defines `SettlementMetrics` and `SettlementLogger`. The API uses `parabola_api_requests_total` and `parabola_api_request_duration_ms`. The worker uses `parabola_indexer_task_total`, `parabola_indexer_task_duration_ms`, `parabola_indexer_cycle_total`, and `parabola_indexer_cycle_duration_ms`. The webhook dispatcher uses `parabola_webhook_enqueued_total`, `parabola_webhook_delivery_attempt_total`, `parabola_webhook_delivery_total`, `parabola_webhook_delivery_duration_ms`, and `parabola_webhook_replay_total`. `MemoryMetrics`, `MemoryLogger`, and `JsonLogger` are reference implementations, not a metrics backend.
+`@asctp/parabola/observability` defines `SettlementMetrics` and `SettlementLogger`. The API uses `parabola_api_requests_total` and `parabola_api_request_duration_ms`. The store server uses `parabola_store_requests_total` and `parabola_store_request_duration_ms`. The worker uses `parabola_indexer_task_total`, `parabola_indexer_task_duration_ms`, `parabola_indexer_cycle_total`, and `parabola_indexer_cycle_duration_ms`. The webhook dispatcher uses `parabola_webhook_enqueued_total`, `parabola_webhook_delivery_attempt_total`, `parabola_webhook_delivery_total`, `parabola_webhook_delivery_duration_ms`, and `parabola_webhook_replay_total`. `MemoryMetrics`, `MemoryLogger`, and `JsonLogger` are reference implementations, not a metrics backend.
 
 `@asctp/parabola/webhooks` adds outbound delivery. `WebhookDispatcher` enqueues one delivery per matching endpoint, signs the raw body with HMAC-SHA256, retries `408`, `429`, and `5xx` responses with exponential backoff, honors `Retry-After`, and stops after the configured attempt limit. `WebhookReplayGuard` rejects duplicate event ids at the receiver. `MemoryWebhookEndpointStore`, `FileWebhookEndpointStore`, `MemoryWebhookDeliveryStore`, and `FileWebhookDeliveryStore` are reference stores. `WebhookEndpointManager` validates endpoint changes and rejects duplicate ids. `listFailed()` and `redeliver()` expose dead-letter inspection and replay. Delivery is at least once, so receivers must verify the signature and deduplicate on the event id. The dispatcher accepts a caller-supplied fetch implementation, so tests do not need a live endpoint.
 
@@ -164,6 +168,7 @@ The execution slice adds idempotent persistence and burn recovery around the ker
 - The kernel is covered for success, pending, complete-mint, and progress-failure event sequences.
 - `MemoryTransferStore` is covered for record create, update, replay, claim, renew, release, expiry, and deletion.
 - `FileTransferStore` is covered for atomic create, replacement, deletion, unsafe keys, persistence across store instances, lease claims, renewal, release, expiry, and concurrent claims.
+- The remote store server and clients are covered for record CRUD, shared lease claims, unsafe keys, cursor serialization, authentication, request validation, metrics, and route handling.
 - `reconcileTransfer` is covered for burn promotion, mint promotion, conflicting evidence, missing evidence, terminal records, lease contention, and persistence failures.
 - `indexArcBurns` is covered for matching burns, unmatched records, ambiguous matches, missing source addresses, busy leases, testnet selection, and invalid block ranges.
 - `indexStellarBurns` is covered for event decoding, matching burns, unmatched records, ambiguous matches, missing source addresses, busy leases, testnet selection, pagination, ledger-range stopping, failed contract calls, and invalid ledger ranges.
@@ -188,13 +193,12 @@ The execution slice adds idempotent persistence and burn recovery around the ker
 
 ## Non-goals
 
-Parabola does not provide multi-host mutual exclusion, a hosted webhook management UI, automatic dead-letter scheduling, per-route authorization, rate limiting, TLS termination, gas abstraction, or chains beyond Arc and Stellar. The reference file stores coordinate one host. The HTTP API is an operator surface that belongs behind an ingress and identity layer. The metrics and logging contracts are integration points, not a hosted observability backend.
+Parabola does not provide a distributed database or a multi-writer file store, a hosted webhook management UI, automatic dead-letter scheduling, per-route authorization, rate limiting, TLS termination, gas abstraction, or chains beyond Arc and Stellar. The store server centralizes lease authority for remote clients but remains a single coordination point. The HTTP API and store server are operator surfaces that belong behind an ingress and identity layer. The metrics and logging contracts are integration points, not a hosted observability backend.
 
 ## Next slices
 
-1. Multi-host store and lease backends.
-2. Gas abstraction and additional CCTP domains.
-3. Compatibility policy and release automation.
+1. Gas abstraction and additional CCTP domains.
+2. Compatibility policy and release automation.
 
 ## Verification
 

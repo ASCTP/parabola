@@ -306,7 +306,39 @@ await runtime.syncArcBurns({
 });
 ```
 
-`execute()` claims a lease, persists each kernel progress boundary, and replays a completed record for a repeated key. `reconcile()` applies externally observed burn, attestation, or mint evidence without chain I/O. `syncArcBurns()`, `syncArcMints()`, `syncStellarBurns()`, and `syncStellarMints()` advance durable cursors, verify canonical hashes, and scan only the uncovered range. The file stores are single-host reference implementations; use a shared store when more than one process must coordinate.
+`execute()` claims a lease, persists each kernel progress boundary, and replays a completed record for a repeated key. `reconcile()` applies externally observed burn, attestation, or mint evidence without chain I/O. `syncArcBurns()`, `syncArcMints()`, `syncStellarBurns()`, and `syncStellarMints()` advance durable cursors, verify canonical hashes, and scan only the uncovered range.
+
+The file stores are single-host reference implementations. To coordinate several hosts, run one store authority with `createStoreServer()` and point workers at it with the remote stores:
+
+```typescript
+import { createStoreServer } from "@asctp/parabola/api";
+import {
+  FileTransferStore,
+  RemoteTransferStore,
+} from "@asctp/parabola/execution";
+import {
+  FileIndexerCursorStore,
+  RemoteIndexerCursorStore,
+} from "@asctp/parabola/indexer";
+
+const server = createStoreServer({
+  transferStore: new FileTransferStore(".parabola/transfers"),
+  cursorStore: new FileIndexerCursorStore(".parabola/cursors"),
+  token: process.env.PARABOLA_STORE_TOKEN,
+});
+const address = await server.listen();
+
+const store = new RemoteTransferStore({
+  url: address.url,
+  token: process.env.PARABOLA_STORE_TOKEN,
+});
+const cursors = new RemoteIndexerCursorStore({
+  url: address.url,
+  token: process.env.PARABOLA_STORE_TOKEN,
+});
+```
+
+The store server centralizes record access and lease claims, so every client observes the same lease. It is a coordination point, not a distributed database. Run one server per store authority, or wrap a shared backend with the same `TransferStore` and `IndexerCursorStore` contracts. It defaults to `127.0.0.1:8788`. Put the server behind your ingress and identity layer; bearer authentication is optional and does not provide TLS.
 
 The sync wrappers advance a cursor even when no candidates exist, so a transfer created after its burn block was scanned needs an explicit cursor reset or backfill.
 
@@ -373,7 +405,7 @@ logger.log({
 });
 ```
 
-The API records `parabola_api_requests_total` and `parabola_api_request_duration_ms` with method, route, and status labels, and can call `onRequest` for every completed request. The indexer worker records `parabola_indexer_task_total`, `parabola_indexer_task_duration_ms`, `parabola_indexer_cycle_total`, and `parabola_indexer_cycle_duration_ms`. The webhook dispatcher records `parabola_webhook_enqueued_total`, `parabola_webhook_delivery_attempt_total`, `parabola_webhook_delivery_total`, `parabola_webhook_delivery_duration_ms`, and `parabola_webhook_replay_total`. Pass `metrics` to `createApiServer`, `createIndexerWorker`, or `WebhookDispatcher` to connect a collector.
+The API records `parabola_api_requests_total` and `parabola_api_request_duration_ms` with method, route, and status labels, and can call `onRequest` for every completed request. The store server records `parabola_store_requests_total` and `parabola_store_request_duration_ms` with the same shape. The indexer worker records `parabola_indexer_task_total`, `parabola_indexer_task_duration_ms`, `parabola_indexer_cycle_total`, and `parabola_indexer_cycle_duration_ms`. The webhook dispatcher records `parabola_webhook_enqueued_total`, `parabola_webhook_delivery_attempt_total`, `parabola_webhook_delivery_total`, `parabola_webhook_delivery_duration_ms`, and `parabola_webhook_replay_total`. Pass `metrics` to `createApiServer`, `createStoreServer`, `createIndexerWorker`, or `WebhookDispatcher` to connect a collector.
 
 ## Webhooks
 
@@ -533,8 +565,8 @@ Network configuration used internally:
 
 - **`network` defaults to mainnet.** With `network` omitted, `transfer()` moves real USDC and spends real Arc gas. Pass `network: "testnet"` for development against faucet funds. See [Choosing a network](#choosing-a-network).
 - **Raw `transfer()` and `completeMint()` do not dedupe.** A second `completeMint()` call for a burn that was already minted submits and is rejected on-chain, costing gas. Use the durable runtime with an idempotency key, or keep your own ledger keyed on the burn hash and network. See [Idempotency is yours to enforce at the raw SDK layer](#idempotency-is-yours-to-enforce-at-the-raw-sdk-layer).
-- **The reference stores are single-host.** `FileTransferStore` and `FileIndexerCursorStore` coordinate within one host. Use a shared store when multiple processes must claim transfers or advance cursors together.
-- **The HTTP API is an operator surface, not a public gateway.** It has bearer-token authentication and no per-route authorization, rate limiting, or TLS termination. Put it behind your own ingress and identity layer before exposing it beyond a trusted network.
+- **The reference file stores are single-host.** `FileTransferStore` and `FileIndexerCursorStore` coordinate within one host. `createStoreServer()` with `RemoteTransferStore` and `RemoteIndexerCursorStore` gives multiple clients one store and lease authority, but the server remains a single coordination point rather than a distributed database.
+- **The HTTP API and store server are operator surfaces, not public gateways.** They have optional bearer-token authentication and no per-route authorization, rate limiting, or TLS termination. Put them behind your own ingress and identity layer before exposing them beyond a trusted network.
 - **Webhook delivery is at least once and single-host by default.** The dispatcher retries transient failures, but a receiver can see the same event more than once and must verify the signature and deduplicate on the event id. `FileWebhookEndpointStore` and `FileWebhookDeliveryStore` coordinate one host. There is no hosted endpoint management UI or automatic dead-letter worker; use `WebhookEndpointManager` and `redeliver()` from your own operator path.
 - **The metrics and logger contracts are interfaces, not a backend.** `MemoryMetrics`, `MemoryLogger`, and `JsonLogger` are reference implementations. Connect your own Prometheus, OpenTelemetry, or log pipeline through the exported contracts.
 - **The published tarball ships `dist/` only.** There is no `src/` in the package, so the documented surface is this README, `INTEGRATION.md`, `ARCHITECTURE.md`, and the type declarations. Questions those files do not answer have no second written source to fall back on.
@@ -547,7 +579,7 @@ Network configuration used internally:
 - [circlefin/stellar-cctp](https://github.com/circlefin/stellar-cctp): Circle's official Stellar CCTP contract source and reference TypeScript client (`examples/stellar.ts`, `examples/stellar-utils.ts`). This is the canonical source for contract argument order and hook-data byte layout; check it first before touching `src/chains/stellar.ts` or `src/utils/encoding.ts`'s Stellar-side functions.
 - [CCTP developer docs](https://developers.circle.com/cctp): general CCTP V2 concepts, supported chains and domains, fees.
 - [Arc docs](https://docs.arc.io): Arc network config and contract addresses.
-- [ARCHITECTURE.md](ARCHITECTURE.md) and [docs/adr](docs/adr): the kernel and provider boundary, the durable operation surface, the provider conformance decision, and the webhook delivery and endpoint management decisions.
+- [ARCHITECTURE.md](ARCHITECTURE.md) and [docs/adr](docs/adr): the kernel and provider boundary, the durable operation surface, the provider conformance decision, the webhook delivery and endpoint management decisions, and the remote store and lease server decision.
 
 ## Development
 

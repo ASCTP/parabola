@@ -121,6 +121,40 @@ Keep a ledger keyed on `(burn hash, network)` and return the recorded mint trans
 
 The durable runtime at `@asctp/parabola/runtime` adds idempotency keys, leases, persisted progress, evidence reconciliation, and cursor-backed indexing around the same kernel. If your service can adopt a `TransferStore`, start there instead of rebuilding that ledger. See [README.md's durable execution section](README.md#durable-execution-and-indexing) and [ARCHITECTURE.md](ARCHITECTURE.md#durable-execution).
 
+## Sharing stores across hosts
+
+The file stores coordinate one host. For several worker hosts, run one store server and use the remote clients:
+
+```typescript
+import { createStoreServer } from "@asctp/parabola/api";
+import {
+  FileTransferStore,
+  RemoteTransferStore,
+} from "@asctp/parabola/execution";
+import {
+  FileIndexerCursorStore,
+  RemoteIndexerCursorStore,
+} from "@asctp/parabola/indexer";
+
+const server = createStoreServer({
+  transferStore: new FileTransferStore(".parabola/transfers"),
+  cursorStore: new FileIndexerCursorStore(".parabola/cursors"),
+  token: process.env.PARABOLA_STORE_TOKEN,
+});
+const address = await server.listen();
+
+const store = new RemoteTransferStore({
+  url: address.url,
+  token: process.env.PARABOLA_STORE_TOKEN,
+});
+const cursorStore = new RemoteIndexerCursorStore({
+  url: address.url,
+  token: process.env.PARABOLA_STORE_TOKEN,
+});
+```
+
+Every client calls the same server, so lease claims, renewals, and releases share one authority. The server is not a database. It is a coordination point in front of a `TransferStore` and an optional `IndexerCursorStore`. It listens on `127.0.0.1:8788` by default. Run one server per store authority, or give it a shared backend that implements those contracts. Put it behind your ingress and identity layer; bearer authentication is optional and does not provide TLS. A network failure surfaces as a `RemoteStoreError` with the HTTP status, or as the original fetch error when no response arrives.
+
 ## Delivering transfer events to your own systems
 
 `@asctp/parabola/webhooks` is the outbound counterpart to the operations API. It signs a JSON event with HMAC-SHA256, retries transient failures, and leaves replay protection to the receiver. It does not watch the store for changes. After an execution or reconciliation step, map the stored record with `transferWebhookEvent()` and call `enqueue()`.
