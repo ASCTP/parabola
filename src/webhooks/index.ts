@@ -5,6 +5,7 @@ export type {
   WebhookDeliveryStatus,
   WebhookDeliveryStore,
   WebhookEndpoint,
+  WebhookEndpointStore,
   WebhookEvent,
   WebhookFetch,
   WebhookHttpRequest,
@@ -13,7 +14,24 @@ export type {
 export {
   InvalidWebhookEventError,
   WebhookConfigurationError,
+  WebhookDeliveryNotFoundError,
+  WebhookDeliveryStateError,
+  WebhookEndpointConflictError,
+  WebhookEndpointNotFoundError,
 } from "./errors.js";
+export {
+  assertWebhookEndpoint,
+  assertWebhookEndpoints,
+} from "./endpoint-validation.js";
+export {
+  WebhookEndpointManager,
+} from "./endpoint-manager.js";
+export {
+  MemoryWebhookEndpointStore,
+} from "./endpoint-memory-store.js";
+export {
+  FileWebhookEndpointStore,
+} from "./endpoint-file-store.js";
 export {
   MemoryWebhookDeliveryStore,
 } from "./memory-store.js";

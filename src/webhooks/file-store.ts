@@ -37,6 +37,13 @@ function sortDeliveries(
   );
 }
 
+function sortFailed(
+  a: WebhookDelivery,
+  b: WebhookDelivery,
+): number {
+  return a.updatedAt - b.updatedAt || a.id.localeCompare(b.id);
+}
+
 export class FileWebhookDeliveryStore implements WebhookDeliveryStore {
   private readonly directory: string;
 
@@ -115,6 +122,19 @@ export class FileWebhookDeliveryStore implements WebhookDeliveryStore {
         delivery.nextAttemptAt <= now,
     );
     return limit === undefined ? due : due.slice(0, limit);
+  }
+
+  async listFailed(limit?: number): Promise<WebhookDelivery[]> {
+    if (
+      limit !== undefined &&
+      (!Number.isInteger(limit) || limit < 0)
+    ) {
+      throw new RangeError("limit must be a non-negative integer");
+    }
+    const failed = (await this.list())
+      .filter((delivery) => delivery.status === "failed")
+      .sort(sortFailed);
+    return limit === undefined ? failed : failed.slice(0, limit);
   }
 
   async create(delivery: WebhookDelivery): Promise<boolean> {

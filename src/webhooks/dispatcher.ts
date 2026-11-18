@@ -7,12 +7,19 @@ import type {
   WebhookDeliveryStatus,
   WebhookDeliveryStore,
   WebhookEndpoint,
+  WebhookEndpointStore,
   WebhookEvent,
   WebhookFetch,
 } from "./contracts.js";
 import {
+  assertWebhookEndpoint,
+  assertWebhookEndpoints,
+} from "./endpoint-validation.js";
+import {
   InvalidWebhookEventError,
   WebhookConfigurationError,
+  WebhookDeliveryNotFoundError,
+  WebhookDeliveryStateError,
 } from "./errors.js";
 import { signWebhookPayload } from "./signature.js";
 
@@ -24,7 +31,8 @@ const DEFAULT_BATCH_SIZE = 100;
 const DEFAULT_USER_AGENT = "parabola-webhooks/0.4";
 
 export interface WebhookDispatcherOptions {
-  endpoints: readonly WebhookEndpoint[];
+  endpoints?: readonly WebhookEndpoint[];
+  endpointStore?: WebhookEndpointStore;
   store: WebhookDeliveryStore;
   http?: WebhookFetch;
   timeoutMs?: number;
@@ -66,50 +74,13 @@ function cloneEvent(event: WebhookEvent): WebhookEvent {
   return { ...event, data: structuredClone(event.data) };
 }
 
-function validateEndpoint(endpoint: WebhookEndpoint): void {
-  if (endpoint.id.trim() === "") {
-    throw new WebhookConfigurationError(
-      "Webhook endpoint id must not be empty",
-    );
-  }
-  if (endpoint.secret === "") {
-    throw new WebhookConfigurationError(
-      "Webhook endpoint secret must not be empty",
-      endpoint.id,
-    );
-  }
-  let url: URL;
-  try {
-    url = new URL(endpoint.url);
-  } catch {
-    throw new WebhookConfigurationError(
-      "Webhook endpoint url must be a valid URL",
-      endpoint.id,
-    );
-  }
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new WebhookConfigurationError(
-      "Webhook endpoint url must use http or https",
-      endpoint.id,
-    );
-  }
-}
-
 function endpointMap(
   endpoints: readonly WebhookEndpoint[],
 ): Map<string, WebhookEndpoint> {
-  const map = new Map<string, WebhookEndpoint>();
-  for (const endpoint of endpoints) {
-    validateEndpoint(endpoint);
-    if (map.has(endpoint.id)) {
-      throw new WebhookConfigurationError(
-        `Webhook endpoint ${endpoint.id} is registered more than once`,
-        endpoint.id,
-      );
-    }
-    map.set(endpoint.id, endpoint);
-  }
-  return map;
+  assertWebhookEndpoints(endpoints);
+  return new Map(
+    endpoints.map((endpoint) => [endpoint.id, endpoint]),
+  );
 }
 
 function matchesEvent(
@@ -164,7 +135,8 @@ export function webhookDeliveryId(
 }
 
 export class WebhookDispatcher {
-  private readonly endpoints: Map<string, WebhookEndpoint>;
+  private readonly endpoints: Map<string, WebhookEndpoint> | undefined;
+  private readonly endpointStore: WebhookEndpointStore | undefined;
   private readonly store: WebhookDeliveryStore;
   private readonly http: WebhookFetch;
   private readonly timeoutMs: number;
@@ -179,7 +151,19 @@ export class WebhookDispatcher {
   private inFlight: Promise<WebhookDispatchResult> | undefined;
 
   constructor(options: WebhookDispatcherOptions) {
-    this.endpoints = endpointMap(options.endpoints);
+    if (
+      (options.endpoints === undefined) ===
+      (options.endpointStore === undefined)
+    ) {
+      throw new WebhookConfigurationError(
+        "Provide either endpoints or endpointStore",
+      );
+    }
+    this.endpoints =
+      options.endpoints === undefined
+        ? undefined
+        : endpointMap(options.endpoints);
+    this.endpointStore = options.endpointStore;
     this.store = options.store;
     this.http = options.http ?? (fetch as WebhookFetch);
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -199,6 +183,75 @@ export class WebhookDispatcher {
     assertPositiveInteger("baseDelayMs", this.baseDelayMs);
     assertPositiveInteger("maxDelayMs", this.maxDelayMs);
     assertPositiveInteger("batchSize", this.batchSize);
+  }
+
+  listEndpoints(): Promise<WebhookEndpoint[]> {
+    return this.loadEndpoints();
+  }
+
+  listFailed(limit?: number): Promise<WebhookDelivery[]> {
+    return this.store.listFailed(limit);
+  }
+
+  async redeliver(deliveryId: string): Promise<WebhookDelivery> {
+    const delivery = await this.store.get(deliveryId);
+    if (!delivery) {
+      throw new WebhookDeliveryNotFoundError(deliveryId);
+    }
+    if (delivery.status !== "failed") {
+      throw new WebhookDeliveryStateError(
+        deliveryId,
+        delivery.status,
+      );
+    }
+
+    const now = this.now();
+    delivery.status = "pending";
+    delivery.attempts = 0;
+    delivery.nextAttemptAt = now;
+    delivery.updatedAt = now;
+    delete delivery.deliveredAt;
+    delete delivery.responseStatus;
+    delete delivery.lastError;
+    await this.store.put(delivery);
+
+    this.metrics?.counter("parabola_webhook_replay_total", 1, {
+      endpoint_id: delivery.endpointId,
+    });
+    this.logger?.log({
+      level: "info",
+      event: "webhook.delivery.replayed",
+      timestamp: now,
+      fields: {
+        deliveryId: delivery.id,
+        eventId: delivery.eventId,
+        endpointId: delivery.endpointId,
+      },
+    });
+
+    return delivery;
+  }
+
+  private async loadEndpoints(): Promise<WebhookEndpoint[]> {
+    if (this.endpoints) {
+      return [...this.endpoints.values()];
+    }
+    const endpoints = (await this.endpointStore?.list()) ?? [];
+    assertWebhookEndpoints(endpoints);
+    return endpoints;
+  }
+
+  private async endpointFor(
+    id: string,
+  ): Promise<WebhookEndpoint | undefined> {
+    if (this.endpoints) {
+      return this.endpoints.get(id);
+    }
+    const endpoint = await this.endpointStore?.get(id);
+    if (endpoint) {
+      assertWebhookEndpoint(endpoint);
+    }
+    return endpoint;
   }
 
   async enqueue(event: WebhookEvent): Promise<WebhookDelivery[]> {
@@ -223,8 +276,9 @@ export class WebhookDispatcher {
 
     const now = this.now();
     const created: WebhookDelivery[] = [];
+    const endpoints = await this.loadEndpoints();
 
-    for (const endpoint of this.endpoints.values()) {
+    for (const endpoint of endpoints) {
       if (!matchesEvent(endpoint, event)) {
         continue;
       }
@@ -298,7 +352,7 @@ export class WebhookDispatcher {
   private async deliver(
     delivery: WebhookDelivery,
   ): Promise<WebhookDeliveryResult> {
-    const endpoint = this.endpoints.get(delivery.endpointId);
+    const endpoint = await this.endpointFor(delivery.endpointId);
     if (!endpoint || endpoint.enabled === false) {
       delivery.status = "failed";
       delivery.attempts += 1;

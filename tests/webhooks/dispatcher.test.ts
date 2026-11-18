@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MemoryLogger, MemoryMetrics } from "../../src/observability.js";
 import type {
+  WebhookDelivery,
   WebhookEndpoint,
   WebhookEvent,
   WebhookFetch,
@@ -11,7 +12,12 @@ import {
   WebhookDispatcher,
   webhookDeliveryId,
 } from "../../src/webhooks/dispatcher.js";
-import { WebhookConfigurationError } from "../../src/webhooks/errors.js";
+import { MemoryWebhookEndpointStore } from "../../src/webhooks/endpoint-memory-store.js";
+import {
+  WebhookConfigurationError,
+  WebhookDeliveryNotFoundError,
+  WebhookDeliveryStateError,
+} from "../../src/webhooks/errors.js";
 import { MemoryWebhookDeliveryStore } from "../../src/webhooks/memory-store.js";
 import { verifyWebhookSignature } from "../../src/webhooks/signature.js";
 
@@ -137,6 +143,78 @@ describe("webhook dispatcher enqueue", () => {
     );
 
     expect(await subject.enqueue(event())).toHaveLength(1);
+  });
+
+  it("loads endpoints from an endpoint store", async () => {
+    const endpointStore = new MemoryWebhookEndpointStore();
+    await endpointStore.create(endpoint());
+    const store = new MemoryWebhookDeliveryStore();
+    const { fetch } = fakeFetch(response(200));
+    const subject = new WebhookDispatcher({
+      endpointStore,
+      store,
+      http: fetch,
+      now: () => NOW,
+    });
+
+    expect(await subject.listEndpoints()).toEqual([endpoint()]);
+    expect(await subject.enqueue(event())).toHaveLength(1);
+  });
+
+  it("uses endpoint changes at delivery time", async () => {
+    const endpointStore = new MemoryWebhookEndpointStore();
+    await endpointStore.create(endpoint());
+    const store = new MemoryWebhookDeliveryStore();
+    const { fetch, calls } = fakeFetch(response(200));
+    const subject = new WebhookDispatcher({
+      endpointStore,
+      store,
+      http: fetch,
+      now: () => NOW,
+    });
+    await subject.enqueue(event());
+    await endpointStore.put(
+      endpoint({
+        url: "https://example.com/updated",
+        secret: "whsec_updated",
+      }),
+    );
+
+    await subject.dispatchDue(NOW);
+
+    const call = calls[0] as FetchCall;
+    expect(call.url).toBe("https://example.com/updated");
+    expect(
+      verifyWebhookSignature({
+        secret: "whsec_updated",
+        header: call.request.headers["x-parabola-signature"],
+        body: call.request.body,
+        now: 1_700_000_000,
+      }),
+    ).toBe(true);
+  });
+
+  it("fails a delivery when its endpoint is removed from the store", async () => {
+    const endpointStore = new MemoryWebhookEndpointStore();
+    await endpointStore.create(endpoint());
+    const store = new MemoryWebhookDeliveryStore();
+    const { fetch } = fakeFetch();
+    const subject = new WebhookDispatcher({
+      endpointStore,
+      store,
+      http: fetch,
+      now: () => NOW,
+    });
+    await subject.enqueue(event());
+    await endpointStore.delete("endpoint_1");
+
+    const result = await subject.dispatchDue(NOW);
+
+    expect(result.deliveries[0]).toMatchObject({
+      status: "failed",
+      attempts: 1,
+      error: "Webhook endpoint is no longer configured",
+    });
   });
 
   it("rejects invalid events", async () => {
@@ -391,7 +469,97 @@ describe("webhook dispatcher delivery", () => {
   });
 });
 
+describe("webhook dispatcher replay", () => {
+  it("replays a failed delivery", async () => {
+    const store = new MemoryWebhookDeliveryStore();
+    const metrics = new MemoryMetrics();
+    const { fetch } = fakeFetch(
+      response(400),
+      response(200),
+    );
+    const subject = dispatcher([endpoint()], fetch, store, {
+      metrics,
+    });
+    await subject.enqueue(event());
+    await subject.dispatchDue(NOW);
+    const failed = (await subject.listFailed())[0] as WebhookDelivery;
+
+    const replay = await subject.redeliver(failed.id);
+
+    expect(replay).toMatchObject({
+      status: "pending",
+      attempts: 0,
+      nextAttemptAt: NOW,
+    });
+    expect((await store.get(failed.id))?.lastError).toBeUndefined();
+    expect(metrics.snapshot()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "parabola_webhook_replay_total",
+          labels: { endpoint_id: "endpoint_1" },
+        }),
+      ]),
+    );
+
+    const result = await subject.dispatchDue(NOW);
+    expect(result.deliveries[0]).toMatchObject({
+      status: "delivered",
+      attempts: 1,
+      responseStatus: 200,
+    });
+  });
+
+  it("rejects a missing delivery", async () => {
+    const { fetch } = fakeFetch();
+    const subject = dispatcher(
+      [endpoint()],
+      fetch,
+      new MemoryWebhookDeliveryStore(),
+    );
+
+    await expect(
+      subject.redeliver("missing"),
+    ).rejects.toThrow(WebhookDeliveryNotFoundError);
+  });
+
+  it("rejects a delivery that has not failed", async () => {
+    const store = new MemoryWebhookDeliveryStore();
+    const { fetch } = fakeFetch(response(200));
+    const subject = dispatcher([endpoint()], fetch, store);
+    await subject.enqueue(event());
+    await subject.dispatchDue(NOW);
+
+    await expect(
+      subject.redeliver(
+        webhookDeliveryId("evt_1", "endpoint_1"),
+      ),
+    ).rejects.toThrow(WebhookDeliveryStateError);
+  });
+});
+
 describe("webhook dispatcher configuration", () => {
+  it("requires exactly one endpoint source", () => {
+    const { fetch } = fakeFetch();
+    const store = new MemoryWebhookDeliveryStore();
+
+    expect(
+      () =>
+        new WebhookDispatcher({
+          store,
+          http: fetch,
+        }),
+    ).toThrow(/either endpoints or endpointStore/);
+    expect(
+      () =>
+        new WebhookDispatcher({
+          endpoints: [endpoint()],
+          endpointStore: new MemoryWebhookEndpointStore(),
+          store,
+          http: fetch,
+        }),
+    ).toThrow(/either endpoints or endpointStore/);
+  });
+
   it("rejects duplicate endpoint ids", () => {
     const { fetch } = fakeFetch();
 

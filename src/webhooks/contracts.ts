@@ -38,10 +38,19 @@ export interface WebhookDelivery {
   event: WebhookEvent;
 }
 
+export interface WebhookEndpointStore {
+  get(id: string): Promise<WebhookEndpoint | undefined>;
+  list(): Promise<WebhookEndpoint[]>;
+  create(endpoint: WebhookEndpoint): Promise<boolean>;
+  put(endpoint: WebhookEndpoint): Promise<void>;
+  delete(id: string): Promise<void>;
+}
+
 export interface WebhookDeliveryStore {
   get(id: string): Promise<WebhookDelivery | undefined>;
   list(): Promise<WebhookDelivery[]>;
   listDue(now: number, limit?: number): Promise<WebhookDelivery[]>;
+  listFailed(limit?: number): Promise<WebhookDelivery[]>;
   create(delivery: WebhookDelivery): Promise<boolean>;
   put(delivery: WebhookDelivery): Promise<void>;
   delete(id: string): Promise<void>;

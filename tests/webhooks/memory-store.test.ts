@@ -105,6 +105,30 @@ describe("memory webhook delivery store", () => {
     ).toEqual([]);
   });
 
+  it("lists failed deliveries in update order", async () => {
+    const store = new MemoryWebhookDeliveryStore();
+    await store.create(
+      delivery("later", {
+        status: "failed",
+        updatedAt: 2_000,
+      }),
+    );
+    await store.create(
+      delivery("earlier", {
+        status: "failed",
+        updatedAt: 1_000,
+      }),
+    );
+    await store.create(delivery("pending"));
+
+    expect(
+      (await store.listFailed()).map((item) => item.id),
+    ).toEqual(["earlier", "later"]);
+    expect(
+      (await store.listFailed(1)).map((item) => item.id),
+    ).toEqual(["earlier"]);
+  });
+
   it("rejects an invalid due limit", async () => {
     const store = new MemoryWebhookDeliveryStore();
 
@@ -114,5 +138,6 @@ describe("memory webhook delivery store", () => {
     await expect(store.listDue(1_000, 1.5)).rejects.toThrow(
       RangeError,
     );
+    await expect(store.listFailed(-1)).rejects.toThrow(RangeError);
   });
 });

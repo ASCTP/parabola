@@ -48,6 +48,9 @@ describe("package subpath exports", () => {
   it("exposes the webhook surface", () => {
     expect(webhooks.WebhookDispatcher).toBeTypeOf("function");
     expect(webhooks.WebhookReplayGuard).toBeTypeOf("function");
+    expect(webhooks.WebhookEndpointManager).toBeTypeOf("function");
+    expect(webhooks.MemoryWebhookEndpointStore).toBeTypeOf("function");
+    expect(webhooks.FileWebhookEndpointStore).toBeTypeOf("function");
     expect(webhooks.MemoryWebhookDeliveryStore).toBeTypeOf("function");
     expect(webhooks.FileWebhookDeliveryStore).toBeTypeOf("function");
     expect(webhooks.signWebhookPayload).toBeTypeOf("function");
