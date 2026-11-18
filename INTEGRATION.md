@@ -128,20 +128,26 @@ The durable runtime at `@asctp/parabola/runtime` adds idempotency keys, leases, 
 ```typescript
 import {
   FileWebhookDeliveryStore,
+  FileWebhookEndpointStore,
   WebhookDispatcher,
+  WebhookEndpointManager,
   transferWebhookEvent,
 } from "@asctp/parabola/webhooks";
 
+const endpointStore = new FileWebhookEndpointStore(
+  ".parabola/webhook-endpoints",
+);
+const endpoints = new WebhookEndpointManager(endpointStore);
+await endpoints.create({
+  id: "orders",
+  url: "https://example.com/parabola/events",
+  secret: process.env.PARABOLA_WEBHOOK_SECRET!,
+  events: ["transfer.minted", "transfer.failed"],
+});
+
 const dispatcher = new WebhookDispatcher({
+  endpointStore,
   store: new FileWebhookDeliveryStore(".parabola/webhooks"),
-  endpoints: [
-    {
-      id: "orders",
-      url: "https://example.com/parabola/events",
-      secret: process.env.PARABOLA_WEBHOOK_SECRET!,
-      events: ["transfer.minted", "transfer.failed"],
-    },
-  ],
 });
 
 const { record } = await runtime.execute(params, {
@@ -153,7 +159,7 @@ await dispatcher.dispatchDue();
 
 Treat delivery as at least once. Verify `x-parabola-signature` against the raw request body before parsing it, reject timestamps outside your tolerance, then pass the event id to `WebhookReplayGuard` or your own durable dedupe table. The timestamp window blocks old captures. The event id blocks a replay inside the window. A process-local replay guard is enough for one receiver process. Multiple receiver processes need a shared dedupe store.
 
-`FileWebhookDeliveryStore` is single-host, like the other reference stores. For more than one dispatcher process, use a shared `WebhookDeliveryStore` implementation. `dispatchDue()` sends one batch of due deliveries, so run it on a timer or at the end of your worker cycle. Failed deliveries stay in the store for inspection. Replaying them is currently an operator action.
+`FileWebhookEndpointStore` and `FileWebhookDeliveryStore` are single-host, like the other reference stores. For more than one dispatcher process, use shared `WebhookEndpointStore` and `WebhookDeliveryStore` implementations. Endpoints are read on each enqueue and delivery, so manager changes apply without rebuilding the dispatcher. `dispatchDue()` sends one batch of due deliveries, so run it on a timer or at the end of your worker cycle. Failed deliveries stay in the store for inspection. Use `listFailed()` to read them and `redeliver(id)` to reset one to pending with a fresh attempt budget, then call `dispatchDue()` again.
 
 ## Network selection in a service
 

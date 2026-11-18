@@ -23,7 +23,7 @@ Parabola is a settlement kernel for moving native USDC across CCTP domains. The 
 - `src/api.ts` serves the operator HTTP API over the same store and cursor contracts.
 - `src/cli.ts` and `src/cli-entry.ts` provide the `parabola` operator CLI.
 - `src/observability.ts` defines the metrics and structured logging contracts and reference implementations.
-- `src/webhooks/` contains signed outbound delivery, retry policy, replay protection, and memory and file delivery stores. It depends on execution record types and observability contracts, not on the kernel or providers.
+- `src/webhooks/` contains signed outbound delivery, retry policy, endpoint management, dead-letter replay, replay protection, and memory and file endpoint and delivery stores. It depends on execution record types and observability contracts, not on the kernel or providers.
 - `src/index.ts` is the root package export surface. `src/execution/index.ts`, `src/indexer/index.ts`, `src/runtime.ts`, `src/api.ts`, `src/observability.ts`, `src/conformance/index.ts`, `src/providers/index.ts`, and `src/webhooks/index.ts` are separate package subpaths.
 
 ## Dependency rule
@@ -110,9 +110,9 @@ The runtime is exported from `@asctp/parabola/runtime`. The execution and indexe
 
 The CLI wraps the runtime and worker with file-backed stores. `list`, `reconcile`, and `resolve` are one-shot commands. `sync` runs one cycle or watches on an interval. `serve` starts the HTTP API and shuts down cleanly on `SIGINT` or `SIGTERM`. `--json` makes every command machine-readable.
 
-`@asctp/parabola/observability` defines `SettlementMetrics` and `SettlementLogger`. The API uses `parabola_api_requests_total` and `parabola_api_request_duration_ms`. The worker uses `parabola_indexer_task_total`, `parabola_indexer_task_duration_ms`, `parabola_indexer_cycle_total`, and `parabola_indexer_cycle_duration_ms`. The webhook dispatcher uses `parabola_webhook_enqueued_total`, `parabola_webhook_delivery_attempt_total`, `parabola_webhook_delivery_total`, and `parabola_webhook_delivery_duration_ms`. `MemoryMetrics`, `MemoryLogger`, and `JsonLogger` are reference implementations, not a metrics backend.
+`@asctp/parabola/observability` defines `SettlementMetrics` and `SettlementLogger`. The API uses `parabola_api_requests_total` and `parabola_api_request_duration_ms`. The worker uses `parabola_indexer_task_total`, `parabola_indexer_task_duration_ms`, `parabola_indexer_cycle_total`, and `parabola_indexer_cycle_duration_ms`. The webhook dispatcher uses `parabola_webhook_enqueued_total`, `parabola_webhook_delivery_attempt_total`, `parabola_webhook_delivery_total`, `parabola_webhook_delivery_duration_ms`, and `parabola_webhook_replay_total`. `MemoryMetrics`, `MemoryLogger`, and `JsonLogger` are reference implementations, not a metrics backend.
 
-`@asctp/parabola/webhooks` adds outbound delivery. `WebhookDispatcher` enqueues one delivery per matching endpoint, signs the raw body with HMAC-SHA256, retries `408`, `429`, and `5xx` responses with exponential backoff, honors `Retry-After`, and stops after the configured attempt limit. `WebhookReplayGuard` rejects duplicate event ids at the receiver. `MemoryWebhookDeliveryStore` and `FileWebhookDeliveryStore` are reference stores. Delivery is at least once, so receivers must verify the signature and deduplicate on the event id. The dispatcher accepts a caller-supplied fetch implementation, so tests do not need a live endpoint.
+`@asctp/parabola/webhooks` adds outbound delivery. `WebhookDispatcher` enqueues one delivery per matching endpoint, signs the raw body with HMAC-SHA256, retries `408`, `429`, and `5xx` responses with exponential backoff, honors `Retry-After`, and stops after the configured attempt limit. `WebhookReplayGuard` rejects duplicate event ids at the receiver. `MemoryWebhookEndpointStore`, `FileWebhookEndpointStore`, `MemoryWebhookDeliveryStore`, and `FileWebhookDeliveryStore` are reference stores. `WebhookEndpointManager` validates endpoint changes and rejects duplicate ids. `listFailed()` and `redeliver()` expose dead-letter inspection and replay. Delivery is at least once, so receivers must verify the signature and deduplicate on the event id. The dispatcher accepts a caller-supplied fetch implementation, so tests do not need a live endpoint.
 
 ## Provider contract
 
@@ -182,20 +182,19 @@ The execution slice adds idempotent persistence and burn recovery around the ker
 - `MemoryMetrics`, `MemoryLogger`, and `JsonLogger` are covered for recording, label isolation, reset behavior, bigint serialization, and structured records.
 - The conformance harness is covered for static adapter checks, live probe ordering, empty hashes, skipped recipient checks, complete dependency checks, missing methods, and wrong chain slots.
 - `ChainAdapterRegistry` is covered for registration, resolution, duplicate rejection, conformance rejection, and incomplete records.
-- `WebhookDispatcher` is covered for endpoint filtering, idempotent enqueue, signed payloads, successful delivery, retries, `Retry-After`, client errors, network failures, missing and disabled endpoints, in-flight deduplication, metrics, and logs.
-- `WebhookReplayGuard`, `MemoryWebhookDeliveryStore`, `FileWebhookDeliveryStore`, and `transferWebhookEvent` are covered for replay windows, expiry, eviction, persistence, due ordering, unsafe ids, and phase mapping.
+- `WebhookDispatcher` is covered for endpoint filtering, idempotent enqueue, signed payloads, successful delivery, retries, `Retry-After`, client errors, network failures, missing and disabled endpoints, endpoint store changes, dead-letter replay, in-flight deduplication, metrics, and logs.
+- `WebhookReplayGuard`, `WebhookEndpointManager`, the endpoint stores, the delivery stores, and `transferWebhookEvent` are covered for replay windows, expiry, eviction, endpoint validation, persistence, due and failed ordering, unsafe ids, and phase mapping.
 - The API, observability, conformance, provider, and webhook subpaths are covered for their expected value exports.
 
 ## Non-goals
 
-Parabola does not provide multi-host mutual exclusion, webhook endpoint management, dead-letter replay, per-route authorization, rate limiting, TLS termination, gas abstraction, or chains beyond Arc and Stellar. The reference file stores coordinate one host. The HTTP API is an operator surface that belongs behind an ingress and identity layer. The metrics and logging contracts are integration points, not a hosted observability backend.
+Parabola does not provide multi-host mutual exclusion, a hosted webhook management UI, automatic dead-letter scheduling, per-route authorization, rate limiting, TLS termination, gas abstraction, or chains beyond Arc and Stellar. The reference file stores coordinate one host. The HTTP API is an operator surface that belongs behind an ingress and identity layer. The metrics and logging contracts are integration points, not a hosted observability backend.
 
 ## Next slices
 
 1. Multi-host store and lease backends.
-2. Webhook endpoint management and dead-letter replay.
-3. Gas abstraction and additional CCTP domains.
-4. Compatibility policy and release automation.
+2. Gas abstraction and additional CCTP domains.
+3. Compatibility policy and release automation.
 
 ## Verification
 

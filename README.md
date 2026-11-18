@@ -2,7 +2,7 @@
 
 Parabola is a developer platform for the Arc&harr;Stellar USDC corridor. Today that means an SDK,
 a durable execution runtime, chain-event indexing, an operator CLI and HTTP API, provider
-conformance tooling, and signed webhook delivery. Gas abstraction and additional CCTP domains
+conformance tooling, and signed webhook delivery with endpoint management and replay. Gas abstraction and additional CCTP domains
 are the direction it is headed as the corridor sees real usage. That is a lens on where this
 goes, not a committed timeline.
 
@@ -373,7 +373,7 @@ logger.log({
 });
 ```
 
-The API records `parabola_api_requests_total` and `parabola_api_request_duration_ms` with method, route, and status labels, and can call `onRequest` for every completed request. The indexer worker records `parabola_indexer_task_total`, `parabola_indexer_task_duration_ms`, `parabola_indexer_cycle_total`, and `parabola_indexer_cycle_duration_ms`. The webhook dispatcher records `parabola_webhook_enqueued_total`, `parabola_webhook_delivery_attempt_total`, `parabola_webhook_delivery_total`, and `parabola_webhook_delivery_duration_ms`. Pass `metrics` to `createApiServer`, `createIndexerWorker`, or `WebhookDispatcher` to connect a collector.
+The API records `parabola_api_requests_total` and `parabola_api_request_duration_ms` with method, route, and status labels, and can call `onRequest` for every completed request. The indexer worker records `parabola_indexer_task_total`, `parabola_indexer_task_duration_ms`, `parabola_indexer_cycle_total`, and `parabola_indexer_cycle_duration_ms`. The webhook dispatcher records `parabola_webhook_enqueued_total`, `parabola_webhook_delivery_attempt_total`, `parabola_webhook_delivery_total`, `parabola_webhook_delivery_duration_ms`, and `parabola_webhook_replay_total`. Pass `metrics` to `createApiServer`, `createIndexerWorker`, or `WebhookDispatcher` to connect a collector.
 
 ## Webhooks
 
@@ -382,21 +382,26 @@ The API records `parabola_api_requests_total` and `parabola_api_request_duration
 ```typescript
 import {
   FileWebhookDeliveryStore,
+  FileWebhookEndpointStore,
   WebhookDispatcher,
+  WebhookEndpointManager,
   transferWebhookEvent,
 } from "@asctp/parabola/webhooks";
 
-const store = new FileWebhookDeliveryStore(".parabola/webhooks");
+const endpointStore = new FileWebhookEndpointStore(
+  ".parabola/webhook-endpoints",
+);
+const endpoints = new WebhookEndpointManager(endpointStore);
+await endpoints.create({
+  id: "orders",
+  url: "https://example.com/parabola/events",
+  secret: process.env.PARABOLA_WEBHOOK_SECRET!,
+  events: ["transfer.minted", "transfer.failed"],
+});
+
 const dispatcher = new WebhookDispatcher({
-  store,
-  endpoints: [
-    {
-      id: "orders",
-      url: "https://example.com/parabola/events",
-      secret: process.env.PARABOLA_WEBHOOK_SECRET!,
-      events: ["transfer.minted", "transfer.failed"],
-    },
-  ],
+  endpointStore,
+  store: new FileWebhookDeliveryStore(".parabola/webhooks"),
 });
 
 await dispatcher.enqueue(transferWebhookEvent(record));
@@ -435,6 +440,16 @@ app.post("/parabola/events", async (request, response) => {
 ```
 
 Delivery is at least once. The dispatcher retries `408`, `429`, and `5xx` responses with exponential backoff, honors `Retry-After`, and stops after `maxAttempts`. Other `4xx` responses are terminal. Use `x-parabola-event-id` with `WebhookReplayGuard` to reject duplicates. `MemoryWebhookDeliveryStore` is for tests and single-process use. `FileWebhookDeliveryStore` is a single-host reference. `dispatchDue()` sends one batch of due deliveries, so call it on a timer or from your worker loop. `transferWebhookEvent()` maps a stored transfer record to `transfer.updated`, `transfer.minted`, `transfer.pending`, `transfer.recoverable`, or `transfer.failed`.
+
+Endpoints are read from the store on each enqueue and delivery, so a change applies without rebuilding the dispatcher. `WebhookEndpointManager` validates URLs and secrets, rejects duplicate ids, and reports missing endpoints. `listFailed()` returns terminal deliveries, and `redeliver(id)` resets a failed delivery to pending with a fresh attempt budget:
+
+```typescript
+const failed = await dispatcher.listFailed();
+if (failed[0]) {
+  await dispatcher.redeliver(failed[0].id);
+  await dispatcher.dispatchDue();
+}
+```
 
 ## Provider conformance
 
@@ -520,7 +535,7 @@ Network configuration used internally:
 - **Raw `transfer()` and `completeMint()` do not dedupe.** A second `completeMint()` call for a burn that was already minted submits and is rejected on-chain, costing gas. Use the durable runtime with an idempotency key, or keep your own ledger keyed on the burn hash and network. See [Idempotency is yours to enforce at the raw SDK layer](#idempotency-is-yours-to-enforce-at-the-raw-sdk-layer).
 - **The reference stores are single-host.** `FileTransferStore` and `FileIndexerCursorStore` coordinate within one host. Use a shared store when multiple processes must claim transfers or advance cursors together.
 - **The HTTP API is an operator surface, not a public gateway.** It has bearer-token authentication and no per-route authorization, rate limiting, or TLS termination. Put it behind your own ingress and identity layer before exposing it beyond a trusted network.
-- **Webhook delivery is at least once and single-host by default.** The dispatcher retries transient failures, but a receiver can see the same event more than once and must verify the signature and deduplicate on the event id. `FileWebhookDeliveryStore` coordinates one host. Endpoint management and dead-letter replay are operator work in this slice.
+- **Webhook delivery is at least once and single-host by default.** The dispatcher retries transient failures, but a receiver can see the same event more than once and must verify the signature and deduplicate on the event id. `FileWebhookEndpointStore` and `FileWebhookDeliveryStore` coordinate one host. There is no hosted endpoint management UI or automatic dead-letter worker; use `WebhookEndpointManager` and `redeliver()` from your own operator path.
 - **The metrics and logger contracts are interfaces, not a backend.** `MemoryMetrics`, `MemoryLogger`, and `JsonLogger` are reference implementations. Connect your own Prometheus, OpenTelemetry, or log pipeline through the exported contracts.
 - **The published tarball ships `dist/` only.** There is no `src/` in the package, so the documented surface is this README, `INTEGRATION.md`, `ARCHITECTURE.md`, and the type declarations. Questions those files do not answer have no second written source to fall back on.
 - **Stellar inbound transfers require `CctpForwarder`.** This is a protocol requirement, not a Parabola choice: Circle's CCTP does not support minting directly to a Stellar address, so every transfer landing on Stellar routes through `mint_and_forward`.
@@ -532,7 +547,7 @@ Network configuration used internally:
 - [circlefin/stellar-cctp](https://github.com/circlefin/stellar-cctp): Circle's official Stellar CCTP contract source and reference TypeScript client (`examples/stellar.ts`, `examples/stellar-utils.ts`). This is the canonical source for contract argument order and hook-data byte layout; check it first before touching `src/chains/stellar.ts` or `src/utils/encoding.ts`'s Stellar-side functions.
 - [CCTP developer docs](https://developers.circle.com/cctp): general CCTP V2 concepts, supported chains and domains, fees.
 - [Arc docs](https://docs.arc.io): Arc network config and contract addresses.
-- [ARCHITECTURE.md](ARCHITECTURE.md) and [docs/adr](docs/adr): the kernel and provider boundary, the durable operation surface, the provider conformance decision, and the signed webhook delivery decision.
+- [ARCHITECTURE.md](ARCHITECTURE.md) and [docs/adr](docs/adr): the kernel and provider boundary, the durable operation surface, the provider conformance decision, and the webhook delivery and endpoint management decisions.
 
 ## Development
 
