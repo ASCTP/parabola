@@ -166,6 +166,14 @@ parabola/
     conformance/
       index.ts          # public conformance subpath exports
       chain-adapter.ts  # static adapter checks, dependency checks, and live probe
+    webhooks/
+      index.ts          # public webhook subpath exports
+      contracts.ts      # endpoint, event, delivery, and store contracts
+      signature.ts      # HMAC-SHA256 signing, verification, and replay guard
+      dispatcher.ts     # signed delivery, retry policy, and metrics
+      transfer-event.ts # transfer record to webhook event mapping
+      memory-store.ts   # single-process delivery store
+      file-store.ts     # single-host delivery store
     chains/
       arc.ts            # Arc-specific CCTP logic (viem)
       stellar.ts         # Stellar-specific CCTP logic, CctpForwarder routing (Soroban)
@@ -180,6 +188,7 @@ parabola/
   tests/                 # vitest unit and contract tests
     conformance/         # provider conformance harness tests
     providers/           # chain adapter registry tests
+    webhooks/            # signing, delivery, replay, and store tests
   examples/              # runnable examples (mainnet default, NETWORK=testnet override)
   demos/                 # demo apps: see demos/README.md; wallet-transfer-demo/ is the first
   scripts/               # address verification and smoke test
@@ -195,7 +204,7 @@ Changes to `src/constants.ts` affect every transfer path; see [Code Standards](#
 
 Parabola uses three layers of testing, each catching a different class of bug:
 
-1. **Unit tests (`tests/`, run via `pnpm test`).** Every network and RPC call is mocked with `vi.mock`. These are fast, run in CI on every push, and are the right place to cover argument-encoding bugs and every error branch; see the existing `vi.mock` patterns in `tests/arc.test.ts` and `tests/stellar.test.ts` for the convention. The execution tests add idempotency, conflict, lease, persistence, burn recovery, and evidence reconciliation coverage. The indexer tests add Arc `DepositForBurn` and `MessageReceived` log matching plus Stellar `deposit_for_burn` and `mint_and_forward` event matching, including pagination, ambiguity handling, malformed-body rejection, lease interaction, cursor persistence, Arc cursor advancement with reorg rewinds, and Stellar ledger cursor advancement with hash verification. The runtime tests cover the default composition, durable execution, evidence reconciliation, and the exported subpaths. The worker tests cover stream isolation, interval validation, shutdown, and metrics. The API tests cover authentication, transfer reads, reconciliation, indexing and sync delegation, request metrics, malformed input, and error mapping. The CLI tests cover parsing, one-shot commands, watch wiring, and JSON output. The observability tests cover metrics, label isolation, and structured logging. The conformance tests cover the shipped adapter and dependency checks plus the provider registry. Unit tests cannot catch a wrong contract address, a wrong ABI, or a real-world RPC quirk, because nothing here talks to a real network.
+1. **Unit tests (`tests/`, run via `pnpm test`).** Every network and RPC call is mocked with `vi.mock`. These are fast, run in CI on every push, and are the right place to cover argument-encoding bugs and every error branch; see the existing `vi.mock` patterns in `tests/arc.test.ts` and `tests/stellar.test.ts` for the convention. The execution tests add idempotency, conflict, lease, persistence, burn recovery, and evidence reconciliation coverage. The indexer tests add Arc `DepositForBurn` and `MessageReceived` log matching plus Stellar `deposit_for_burn` and `mint_and_forward` event matching, including pagination, ambiguity handling, malformed-body rejection, lease interaction, cursor persistence, Arc cursor advancement with reorg rewinds, and Stellar ledger cursor advancement with hash verification. The runtime tests cover the default composition, durable execution, evidence reconciliation, and the exported subpaths. The worker tests cover stream isolation, interval validation, shutdown, and metrics. The API tests cover authentication, transfer reads, reconciliation, indexing and sync delegation, request metrics, malformed input, and error mapping. The CLI tests cover parsing, one-shot commands, watch wiring, and JSON output. The observability tests cover metrics, label isolation, and structured logging. The conformance tests cover the shipped adapter and dependency checks plus the provider registry. The webhook tests cover signing, replay windows, delivery retries, Retry-After handling, endpoint filtering, delivery stores, and transfer event mapping. Unit tests cannot catch a wrong contract address, a wrong ABI, or a real-world RPC quirk, because nothing here talks to a real network.
 
 2. **Live address verification (`pnpm verify:addresses`, `scripts/verify-contract-addresses.mjs`).** Confirms every address in `src/constants.ts` has real, deployed code at that address on its claimed network, both mainnet and testnet: Arc via `eth_getCode`, Stellar via `getContractData`. No funded account needed, since these are public reads. Runs in CI automatically on any PR that touches `src/constants.ts` (`.github/workflows/verify-contract-addresses.yml`). This catches typos and stale addresses; it cannot catch "right shape of address, wrong contract."
 
@@ -281,7 +290,7 @@ Parabola uses [Conventional Commits](https://www.conventionalcommits.org/). Ever
 
 **Types:** `feat`, `fix`, `test`, `docs`, `refactor`, `perf`, `chore`, `ci`
 
-**Scopes (optional):** `arc`, `stellar`, `iris`, `encoding`, `kernel`, `execution`, `indexer`, `runtime`, `worker`, `api`, `cli`, `observability`, `conformance`, `providers`, `transfer`, `estimate`, `examples`, `ci`, `docs`
+**Scopes (optional):** `arc`, `stellar`, `iris`, `encoding`, `kernel`, `execution`, `indexer`, `runtime`, `worker`, `api`, `cli`, `observability`, `conformance`, `providers`, `webhooks`, `transfer`, `estimate`, `examples`, `ci`, `docs`
 
 **Rules:**
 
@@ -315,7 +324,7 @@ docs: document completeMint in the README
 - **Comments:** only comment on WHY, not what the code does. If the code needs a what-comment, rewrite the code instead.
 - **Contract addresses and domain IDs:** never add or change a value in `src/constants.ts` from memory or inference. Pull it from Circle's or Arc's published docs (linked in the README) and cite the source page in the PR description. A wrong address here sends real funds to the wrong place. Any PR touching `src/constants.ts` runs `pnpm verify:addresses` in CI, which checks every address against live RPC (Arc `eth_getCode`, Stellar `getContractData`) to confirm something is actually deployed there. This catches typos and stale addresses, but it's not a substitute for citing the source doc, since a live contract at the wrong address still passes.
 - **Stellar contract call argument order and hook-data encoding:** don't guess these from vague doc summaries. [circlefin/stellar-cctp](https://github.com/circlefin/stellar-cctp) is Circle's official Stellar CCTP contract source and reference TypeScript client. `examples/stellar.ts` and `examples/stellar-utils.ts` there are the canonical answer for `deposit_for_burn`'s argument order and `buildCctpForwarderHookData`'s byte layout. Early versions of `src/chains/stellar.ts` and `src/utils/encoding.ts` got both wrong from inference before this repo was found; a live testnet smoke test caught it, but checking here first would have caught it before any code was written.
-- **Tests:** any change to `src/utils/encoding.ts`, `src/chains/*.ts`, `src/kernel/*.ts`, `src/execution/*.ts`, `src/indexer/*.ts`, `src/runtime.ts`, `src/worker.ts`, `src/api.ts`, `src/cli.ts`, `src/observability.ts`, `src/conformance/*.ts`, `src/providers/*.ts`, or `src/transfer.ts` needs a corresponding test. Network and RPC calls are mocked in unit tests; see the existing `vi.mock` patterns in `tests/` for the convention. `pnpm verify:addresses` (`scripts/verify-contract-addresses.mjs`) is the one check that hits live RPC directly (mainnet and testnet); it needs no funded account since it's read-only. The conformance live probe is opt-in and is not run by `pnpm test`.
+- **Tests:** any change to `src/utils/encoding.ts`, `src/chains/*.ts`, `src/kernel/*.ts`, `src/execution/*.ts`, `src/indexer/*.ts`, `src/runtime.ts`, `src/worker.ts`, `src/api.ts`, `src/cli.ts`, `src/observability.ts`, `src/conformance/*.ts`, `src/providers/*.ts`, `src/webhooks/*.ts`, or `src/transfer.ts` needs a corresponding test. Network and RPC calls are mocked in unit tests; see the existing `vi.mock` patterns in `tests/` for the convention. `pnpm verify:addresses` (`scripts/verify-contract-addresses.mjs`) is the one check that hits live RPC directly (mainnet and testnet); it needs no funded account since it's read-only. The conformance live probe is opt-in and is not run by `pnpm test`.
 
 ---
 

@@ -121,6 +121,40 @@ Keep a ledger keyed on `(burn hash, network)` and return the recorded mint trans
 
 The durable runtime at `@asctp/parabola/runtime` adds idempotency keys, leases, persisted progress, evidence reconciliation, and cursor-backed indexing around the same kernel. If your service can adopt a `TransferStore`, start there instead of rebuilding that ledger. See [README.md's durable execution section](README.md#durable-execution-and-indexing) and [ARCHITECTURE.md](ARCHITECTURE.md#durable-execution).
 
+## Delivering transfer events to your own systems
+
+`@asctp/parabola/webhooks` is the outbound counterpart to the operations API. It signs a JSON event with HMAC-SHA256, retries transient failures, and leaves replay protection to the receiver. It does not watch the store for changes. After an execution or reconciliation step, map the stored record with `transferWebhookEvent()` and call `enqueue()`.
+
+```typescript
+import {
+  FileWebhookDeliveryStore,
+  WebhookDispatcher,
+  transferWebhookEvent,
+} from "@asctp/parabola/webhooks";
+
+const dispatcher = new WebhookDispatcher({
+  store: new FileWebhookDeliveryStore(".parabola/webhooks"),
+  endpoints: [
+    {
+      id: "orders",
+      url: "https://example.com/parabola/events",
+      secret: process.env.PARABOLA_WEBHOOK_SECRET!,
+      events: ["transfer.minted", "transfer.failed"],
+    },
+  ],
+});
+
+const { record } = await runtime.execute(params, {
+  idempotencyKey: "order-123",
+});
+await dispatcher.enqueue(transferWebhookEvent(record));
+await dispatcher.dispatchDue();
+```
+
+Treat delivery as at least once. Verify `x-parabola-signature` against the raw request body before parsing it, reject timestamps outside your tolerance, then pass the event id to `WebhookReplayGuard` or your own durable dedupe table. The timestamp window blocks old captures. The event id blocks a replay inside the window. A process-local replay guard is enough for one receiver process. Multiple receiver processes need a shared dedupe store.
+
+`FileWebhookDeliveryStore` is single-host, like the other reference stores. For more than one dispatcher process, use a shared `WebhookDeliveryStore` implementation. `dispatchDue()` sends one batch of due deliveries, so run it on a timer or at the end of your worker cycle. Failed deliveries stay in the store for inspection. Replaying them is currently an operator action.
+
 ## Network selection in a service
 
 `network` is optional everywhere and defaults to `"mainnet"`. That is convenient for a script and is the wrong failure mode for a long-running process holding a funded key, because an omitted field silently spends real USDC.

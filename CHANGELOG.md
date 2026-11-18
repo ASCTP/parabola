@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Observability primitives at `@asctp/parabola/observability`. `MemoryMetrics`, `MemoryLogger`, `JsonLogger`, and the `SettlementMetrics` and `SettlementLogger` contracts instrument the API and indexer worker.
 - Provider conformance at `@asctp/parabola/conformance`. `assertChainAdapterConforms()` checks the adapter contract, `assertSettlementDependenciesConform()` checks a complete dependency set, and `probeChainAdapter()` runs an opt-in live burn, mint, and recipient check.
 - Provider registry at `@asctp/parabola/providers`. `ChainAdapterRegistry` rejects duplicate chains, validates adapters, and builds the `chains` record used by the kernel.
+- Signed webhook delivery at `@asctp/parabola/webhooks`. `WebhookDispatcher` sends HMAC-SHA256 signed transfer events with exponential backoff, `Retry-After` support, and terminal client-error handling. `WebhookReplayGuard`, `MemoryWebhookDeliveryStore`, `FileWebhookDeliveryStore`, and `transferWebhookEvent()` cover receiver deduplication, persistence, and event mapping.
 - API request metrics and structured request events, plus task and cycle metrics in the indexer worker.
 - CodeQL analysis and Renovate dependency updates. CI now cancels superseded runs, applies least-privilege permissions, and checks the publish tarball with `npm pack --dry-run`.
 
