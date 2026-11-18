@@ -21,6 +21,11 @@ export {
   type IndexerCursor,
   type IndexerCursorStore,
 } from "./cursor.js";
+export { RemoteIndexerCursorStore } from "./remote-cursor-store.js";
+export {
+  RemoteStoreError,
+  type RemoteStoreOptions,
+} from "../store-http.js";
 export {
   IndexerCursorError,
   InvalidIndexerCursorError,

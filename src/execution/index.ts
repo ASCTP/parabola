@@ -20,6 +20,11 @@ export {
 } from "./executor.js";
 export { FileTransferStore } from "./file-store.js";
 export { MemoryTransferStore } from "./memory-store.js";
+export { RemoteTransferStore } from "./remote-store.js";
+export {
+  RemoteStoreError,
+  type RemoteStoreOptions,
+} from "../store-http.js";
 export {
   reconcileTransfer,
   type ReconcileTransferOptions,

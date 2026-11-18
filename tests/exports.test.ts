@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import * as api from "../src/api.js";
 import * as conformance from "../src/conformance/index.js";
 import * as execution from "../src/execution/index.js";
 import * as indexer from "../src/indexer/index.js";
@@ -12,6 +13,8 @@ describe("package subpath exports", () => {
     expect(execution.reconcileTransfer).toBeTypeOf("function");
     expect(execution.MemoryTransferStore).toBeTypeOf("function");
     expect(execution.FileTransferStore).toBeTypeOf("function");
+    expect(execution.RemoteTransferStore).toBeTypeOf("function");
+    expect(execution.RemoteStoreError).toBeTypeOf("function");
   });
 
   it("exposes the indexer surface", () => {
@@ -21,6 +24,13 @@ describe("package subpath exports", () => {
     expect(indexer.syncStellarBurns).toBeTypeOf("function");
     expect(indexer.MemoryIndexerCursorStore).toBeTypeOf("function");
     expect(indexer.FileIndexerCursorStore).toBeTypeOf("function");
+    expect(indexer.RemoteIndexerCursorStore).toBeTypeOf("function");
+    expect(indexer.RemoteStoreError).toBeTypeOf("function");
+  });
+
+  it("exposes the API and store server surface", () => {
+    expect(api.createApiServer).toBeTypeOf("function");
+    expect(api.createStoreServer).toBeTypeOf("function");
   });
 
   it("exposes the observability surface", () => {

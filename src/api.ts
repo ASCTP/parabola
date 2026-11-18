@@ -6,6 +6,18 @@ import {
 } from "node:http";
 import type { TransferStore } from "./execution/contracts.js";
 import {
+  DEFAULT_MAX_BODY_BYTES,
+  HttpRequestError,
+  optionalBigInt,
+  optionalString,
+  readJson,
+  requireObject,
+  requiredBigInt,
+  requiredNumber,
+  requiredString,
+  sendJson,
+} from "./http-json.js";
+import {
   InvalidIdempotencyKeyError,
   TransferConflictError,
   TransferEvidenceError,
@@ -27,7 +39,6 @@ import type { Network } from "./types.js";
 
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 8787;
-const DEFAULT_MAX_BODY_BYTES = 1_048_576;
 
 export type ApiRuntime = Pick<
   SettlementRuntime,
@@ -73,18 +84,8 @@ export interface ApiServer {
   close(): Promise<void>;
 }
 
-class ApiError extends Error {
-  readonly status: number;
-
-  constructor(status: number, message: string) {
-    super(message);
-    this.name = new.target.name;
-    this.status = status;
-  }
-}
-
 function statusFor(error: unknown): number {
-  if (error instanceof ApiError) {
+  if (error instanceof HttpRequestError) {
     return error.status;
   }
   if (error instanceof TransferNotFoundError) {
@@ -116,140 +117,13 @@ function messageFor(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function sendJson(
-  response: ServerResponse,
-  status: number,
-  body: unknown,
-): void {
-  const payload = JSON.stringify(
-    body,
-    (_key, value) => (typeof value === "bigint" ? value.toString() : value),
-  );
-  response.writeHead(status, {
-    "content-type": "application/json; charset=utf-8",
-    "content-length": Buffer.byteLength(payload),
-  });
-  response.end(payload);
-}
-
-async function readJson(
-  request: IncomingMessage,
-  maxBodyBytes: number,
-): Promise<unknown> {
-  const contentType = request.headers["content-type"] ?? "";
-  if (!contentType.includes("application/json")) {
-    throw new ApiError(415, "Content-Type must be application/json");
-  }
-
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const chunk of request) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    size += buffer.length;
-    if (size > maxBodyBytes) {
-      throw new ApiError(413, "Request body is too large");
-    }
-    chunks.push(buffer);
-  }
-
-  if (size === 0) {
-    return {};
-  }
-  try {
-    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
-  } catch {
-    throw new ApiError(400, "Request body is not valid JSON");
-  }
-}
-
-function requireObject(value: unknown): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new ApiError(400, "Request body must be a JSON object");
-  }
-  return value as Record<string, unknown>;
-}
-
-function optionalString(
-  body: Record<string, unknown>,
-  name: string,
-): string | undefined {
-  const value = body[name];
-  if (value === undefined || value === null) {
-    return undefined;
-  }
-  if (typeof value !== "string" || value.trim() === "") {
-    throw new ApiError(400, `${name} must be a non-empty string`);
-  }
-  return value;
-}
-
-function requiredString(
-  body: Record<string, unknown>,
-  name: string,
-): string {
-  const value = optionalString(body, name);
-  if (value === undefined) {
-    throw new ApiError(400, `${name} is required`);
-  }
-  return value;
-}
-
-function requiredBigInt(
-  body: Record<string, unknown>,
-  name: string,
-): bigint {
-  const value = body[name];
-  if (typeof value === "bigint") {
-    return value;
-  }
-  if (typeof value === "string" && /^\d+$/.test(value)) {
-    return BigInt(value);
-  }
-  if (
-    typeof value === "number" &&
-    Number.isSafeInteger(value) &&
-    value >= 0
-  ) {
-    return BigInt(value);
-  }
-  throw new ApiError(400, `${name} must be a non-negative integer`);
-}
-
-function optionalBigInt(
-  body: Record<string, unknown>,
-  name: string,
-): bigint | undefined {
-  if (body[name] === undefined || body[name] === null) {
-    return undefined;
-  }
-  return requiredBigInt(body, name);
-}
-
-function requiredNumber(
-  body: Record<string, unknown>,
-  name: string,
-): number {
-  const value = body[name];
-  if (
-    typeof value === "number" &&
-    Number.isSafeInteger(value) &&
-    value >= 0
-  ) {
-    return value;
-  }
-  if (typeof value === "string" && /^\d+$/.test(value)) {
-    const parsed = Number(value);
-    if (Number.isSafeInteger(parsed)) {
-      return parsed;
-    }
-  }
-  throw new ApiError(400, `${name} must be a non-negative integer`);
-}
-
 function requiredNetwork(body: Record<string, unknown>): Network {
   const value = requiredString(body, "network");
   if (value !== "mainnet" && value !== "testnet") {
-    throw new ApiError(400, "network must be mainnet or testnet");
+    throw new HttpRequestError(
+      400,
+      "network must be mainnet or testnet",
+    );
   }
   return value;
 }
@@ -460,6 +334,14 @@ async function handle(
 
   sendJson(response, 404, { error: "Not found" });
 }
+
+export {
+  createStoreServer,
+  type StoreAddress,
+  type StoreRequestEvent,
+  type StoreServer,
+  type StoreServerOptions,
+} from "./store-server.js";
 
 export function createApiServer(options: ApiServerOptions): ApiServer {
   const runtime = options.runtime ?? createSettlementRuntime(options.store);
