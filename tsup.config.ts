@@ -8,6 +8,8 @@ export default defineConfig({
     "src/runtime.ts",
     "src/api.ts",
     "src/observability.ts",
+    "src/conformance/index.ts",
+    "src/providers/index.ts",
     "src/cli-entry.ts",
   ],
   format: ["esm", "cjs"],

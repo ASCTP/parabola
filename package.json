@@ -4,7 +4,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "description": "TypeScript SDK for moving native USDC between Circle's Arc network and Stellar via CCTP V2",
+  "description": "TypeScript settlement kernel and operations layer for native USDC between Circle's Arc network and Stellar via CCTP V2",
   "type": "module",
   "repository": {
     "type": "git",
@@ -50,6 +50,16 @@
       "types": "./dist/observability.d.ts",
       "import": "./dist/observability.js",
       "require": "./dist/observability.cjs"
+    },
+    "./conformance": {
+      "types": "./dist/conformance/index.d.ts",
+      "import": "./dist/conformance/index.js",
+      "require": "./dist/conformance/index.cjs"
+    },
+    "./providers": {
+      "types": "./dist/providers/index.d.ts",
+      "import": "./dist/providers/index.js",
+      "require": "./dist/providers/index.cjs"
     }
   },
   "files": [

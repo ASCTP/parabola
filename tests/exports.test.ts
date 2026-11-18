@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
+import * as conformance from "../src/conformance/index.js";
 import * as execution from "../src/execution/index.js";
 import * as indexer from "../src/indexer/index.js";
 import * as observability from "../src/observability.js";
+import * as providers from "../src/providers/index.js";
 
 describe("package subpath exports", () => {
   it("exposes the durable execution surface", () => {
@@ -25,5 +27,20 @@ describe("package subpath exports", () => {
     expect(observability.MemoryLogger).toBeTypeOf("function");
     expect(observability.JsonLogger).toBeTypeOf("function");
     expect(observability.noopMetrics).toBeDefined();
+  });
+
+  it("exposes the conformance surface", () => {
+    expect(conformance.ConformanceError).toBeTypeOf("function");
+    expect(conformance.assertChainAdapterConforms).toBeTypeOf("function");
+    expect(conformance.assertSettlementDependenciesConform).toBeTypeOf(
+      "function",
+    );
+    expect(conformance.probeChainAdapter).toBeTypeOf("function");
+  });
+
+  it("exposes the provider surface", () => {
+    expect(providers.ChainAdapterRegistry).toBeTypeOf("function");
+    expect(providers.ProviderRegistryError).toBeTypeOf("function");
+    expect(providers.defaultSettlementDependencies).toBeDefined();
   });
 });

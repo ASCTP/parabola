@@ -33,6 +33,7 @@ import {
   evmAddressToBytes32,
   stellarAddressToBytes32,
 } from "../utils/encoding.js";
+import { ChainAdapterRegistry } from "./registry.js";
 
 function domainFor(chain: ChainId): number {
   return chain === "arc" ? ARC_DOMAIN : STELLAR_DOMAIN;
@@ -209,11 +210,13 @@ const irisFeeAdapter: FeeAdapter = {
   },
 };
 
+const chainAdapters = new ChainAdapterRegistry([
+  arcChainAdapter,
+  stellarChainAdapter,
+]);
+
 export const defaultSettlementDependencies: SettlementDependencies = {
-  chains: {
-    arc: arcChainAdapter,
-    stellar: stellarChainAdapter,
-  },
+  chains: chainAdapters.toRecord(),
   attestations: irisAttestationAdapter,
   fees: irisFeeAdapter,
 };
