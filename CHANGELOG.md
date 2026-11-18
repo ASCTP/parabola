@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Durable execution subpaths. `@asctp/parabola/execution` exposes the idempotent executor, evidence reconciler, lease-aware store contracts, and memory and file stores. `@asctp/parabola/runtime` composes the default kernel with durable execution, reconciliation, chain-event indexing, and cursor sync.
+- Chain-event indexing. `@asctp/parabola/indexer` reads Arc `DepositForBurn` and `MessageReceived` logs plus Stellar `deposit_for_burn` and `mint_and_forward` events, matches them against stored transfers, and persists cursors. Arc sync rewinds on reorgs. Stellar sync verifies ledger hashes and treats a mismatch as a hard error.
+- An operator CLI. `parabola list`, `reconcile`, `resolve`, `sync`, and `serve` drive the durable runtime from a terminal, with `--json` and `--watch` support.
+- An HTTP operations API at `@asctp/parabola/api`. `createApiServer()` serves health, transfer reads, evidence reconciliation, range indexing, and cursor sync behind optional bearer-token authentication.
+- Observability primitives at `@asctp/parabola/observability`. `MemoryMetrics`, `MemoryLogger`, `JsonLogger`, and the `SettlementMetrics` and `SettlementLogger` contracts instrument the API and indexer worker.
+- Provider conformance at `@asctp/parabola/conformance`. `assertChainAdapterConforms()` checks the adapter contract, `assertSettlementDependenciesConform()` checks a complete dependency set, and `probeChainAdapter()` runs an opt-in live burn, mint, and recipient check.
+- Provider registry at `@asctp/parabola/providers`. `ChainAdapterRegistry` rejects duplicate chains, validates adapters, and builds the `chains` record used by the kernel.
+- API request metrics and structured request events, plus task and cycle metrics in the indexer worker.
+- CodeQL analysis and Renovate dependency updates. CI now cancels superseded runs, applies least-privilege permissions, and checks the publish tarball with `npm pack --dry-run`.
+
 ## [0.4.0] - 2026-10-07
 
 ### Added

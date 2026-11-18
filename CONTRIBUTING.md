@@ -124,6 +124,12 @@ You do not need funded Arc or Stellar accounts to work on the SDK itself, since 
 parabola/
   src/
     index.ts          # primary exports
+    runtime.ts        # default kernel plus durable execution and indexing
+    worker.ts         # indexer worker loop, failure isolation, and metrics
+    api.ts            # operator HTTP API
+    cli.ts            # operator CLI commands
+    cli-entry.ts      # executable entry point for the parabola bin
+    observability.ts  # metrics and structured logging contracts
     transfer.ts        # public transfer entry point, delegates to the kernel
     estimate.ts         # fee estimation
     constants.ts        # contract addresses, domain IDs, RPC/Iris URLs
@@ -133,13 +139,33 @@ parabola/
       state.ts          # transfer state machine
       errors.ts         # kernel-level errors
     execution/
+      index.ts          # public execution subpath exports
       contracts.ts      # transfer records and the store contract
-      executor.ts       # idempotent execution and burn recovery over the kernel
-      errors.ts         # conflict and persistence errors
+      executor.ts       # leased execution and burn recovery over the kernel
+      reconciler.ts     # evidence-based recovery for indeterminate records
+      record.ts         # result reconstruction shared by executor and reconciler
+      errors.ts         # conflict, lease, evidence, and persistence errors
       memory-store.ts   # single-process store for tests and embedded use
-      file-store.ts     # single-host JSON store
+      file-store.ts     # single-host JSON store with lease claims
+    indexer/
+      index.ts          # public indexer subpath exports
+      contracts.ts      # indexer options and summaries
+      arc-burns.ts      # Arc DepositForBurn log matching and reconciliation
+      arc-mints.ts      # Arc MessageReceived log matching and reconciliation
+      stellar-burns.ts  # Stellar deposit_for_burn event matching and reconciliation
+      stellar-mints.ts  # Stellar mint_and_forward event matching and reconciliation
+      stellar-events.ts # Shared Soroban event pagination and ledger filtering
+      cursor.ts         # Durable indexer cursor stores
+      arc-sync.ts       # Arc cursor advancement and reorg rewinds
+      stellar-sync.ts   # Stellar ledger cursor advancement and hash verification
+      errors.ts         # indexer-specific errors
     providers/
+      index.ts          # public provider subpath exports
       default.ts        # Arc, Stellar, and Iris adapters behind the provider contracts
+      registry.ts       # validated chain adapter registry
+    conformance/
+      index.ts          # public conformance subpath exports
+      chain-adapter.ts  # static adapter checks, dependency checks, and live probe
     chains/
       arc.ts            # Arc-specific CCTP logic (viem)
       stellar.ts         # Stellar-specific CCTP logic, CctpForwarder routing (Soroban)
@@ -151,7 +177,9 @@ parabola/
       amount.ts            # USDC amount parsing and formatting
       message.ts           # CCTP V2 message decoding (header, burn body, forward hook)
     types.ts              # all exported TypeScript types
-  tests/                 # vitest, one file per module above
+  tests/                 # vitest unit and contract tests
+    conformance/         # provider conformance harness tests
+    providers/           # chain adapter registry tests
   examples/              # runnable examples (mainnet default, NETWORK=testnet override)
   demos/                 # demo apps: see demos/README.md; wallet-transfer-demo/ is the first
   scripts/               # address verification and smoke test
@@ -167,7 +195,7 @@ Changes to `src/constants.ts` affect every transfer path; see [Code Standards](#
 
 Parabola uses three layers of testing, each catching a different class of bug:
 
-1. **Unit tests (`tests/`, run via `pnpm test`).** Every network and RPC call is mocked with `vi.mock`. These are fast, run in CI on every push, and are the right place to cover argument-encoding bugs and every error branch; see the existing `vi.mock` patterns in `tests/arc.test.ts` and `tests/stellar.test.ts` for the convention. The execution tests add idempotency, conflict, persistence, and burn recovery coverage on top of the kernel tests. Unit tests cannot catch a wrong contract address, a wrong ABI, or a real-world RPC quirk, because nothing here talks to a real network.
+1. **Unit tests (`tests/`, run via `pnpm test`).** Every network and RPC call is mocked with `vi.mock`. These are fast, run in CI on every push, and are the right place to cover argument-encoding bugs and every error branch; see the existing `vi.mock` patterns in `tests/arc.test.ts` and `tests/stellar.test.ts` for the convention. The execution tests add idempotency, conflict, lease, persistence, burn recovery, and evidence reconciliation coverage. The indexer tests add Arc `DepositForBurn` and `MessageReceived` log matching plus Stellar `deposit_for_burn` and `mint_and_forward` event matching, including pagination, ambiguity handling, malformed-body rejection, lease interaction, cursor persistence, Arc cursor advancement with reorg rewinds, and Stellar ledger cursor advancement with hash verification. The runtime tests cover the default composition, durable execution, evidence reconciliation, and the exported subpaths. The worker tests cover stream isolation, interval validation, shutdown, and metrics. The API tests cover authentication, transfer reads, reconciliation, indexing and sync delegation, request metrics, malformed input, and error mapping. The CLI tests cover parsing, one-shot commands, watch wiring, and JSON output. The observability tests cover metrics, label isolation, and structured logging. The conformance tests cover the shipped adapter and dependency checks plus the provider registry. Unit tests cannot catch a wrong contract address, a wrong ABI, or a real-world RPC quirk, because nothing here talks to a real network.
 
 2. **Live address verification (`pnpm verify:addresses`, `scripts/verify-contract-addresses.mjs`).** Confirms every address in `src/constants.ts` has real, deployed code at that address on its claimed network, both mainnet and testnet: Arc via `eth_getCode`, Stellar via `getContractData`. No funded account needed, since these are public reads. Runs in CI automatically on any PR that touches `src/constants.ts` (`.github/workflows/verify-contract-addresses.yml`). This catches typos and stale addresses; it cannot catch "right shape of address, wrong contract."
 
@@ -253,7 +281,7 @@ Parabola uses [Conventional Commits](https://www.conventionalcommits.org/). Ever
 
 **Types:** `feat`, `fix`, `test`, `docs`, `refactor`, `perf`, `chore`, `ci`
 
-**Scopes (optional):** `arc`, `stellar`, `iris`, `encoding`, `kernel`, `execution`, `transfer`, `estimate`, `examples`, `ci`, `docs`
+**Scopes (optional):** `arc`, `stellar`, `iris`, `encoding`, `kernel`, `execution`, `indexer`, `runtime`, `worker`, `api`, `cli`, `observability`, `conformance`, `providers`, `transfer`, `estimate`, `examples`, `ci`, `docs`
 
 **Rules:**
 
@@ -287,7 +315,7 @@ docs: document completeMint in the README
 - **Comments:** only comment on WHY, not what the code does. If the code needs a what-comment, rewrite the code instead.
 - **Contract addresses and domain IDs:** never add or change a value in `src/constants.ts` from memory or inference. Pull it from Circle's or Arc's published docs (linked in the README) and cite the source page in the PR description. A wrong address here sends real funds to the wrong place. Any PR touching `src/constants.ts` runs `pnpm verify:addresses` in CI, which checks every address against live RPC (Arc `eth_getCode`, Stellar `getContractData`) to confirm something is actually deployed there. This catches typos and stale addresses, but it's not a substitute for citing the source doc, since a live contract at the wrong address still passes.
 - **Stellar contract call argument order and hook-data encoding:** don't guess these from vague doc summaries. [circlefin/stellar-cctp](https://github.com/circlefin/stellar-cctp) is Circle's official Stellar CCTP contract source and reference TypeScript client. `examples/stellar.ts` and `examples/stellar-utils.ts` there are the canonical answer for `deposit_for_burn`'s argument order and `buildCctpForwarderHookData`'s byte layout. Early versions of `src/chains/stellar.ts` and `src/utils/encoding.ts` got both wrong from inference before this repo was found; a live testnet smoke test caught it, but checking here first would have caught it before any code was written.
-- **Tests:** any change to `src/utils/encoding.ts`, `src/chains/*.ts`, `src/kernel/*.ts`, `src/execution/*.ts`, or `src/transfer.ts` needs a corresponding test. Network and RPC calls are mocked in unit tests; see the existing `vi.mock` patterns in `tests/` for the convention. `pnpm verify:addresses` (`scripts/verify-contract-addresses.mjs`) is the one check that hits live RPC directly (mainnet and testnet); it needs no funded account since it's read-only.
+- **Tests:** any change to `src/utils/encoding.ts`, `src/chains/*.ts`, `src/kernel/*.ts`, `src/execution/*.ts`, `src/indexer/*.ts`, `src/runtime.ts`, `src/worker.ts`, `src/api.ts`, `src/cli.ts`, `src/observability.ts`, `src/conformance/*.ts`, `src/providers/*.ts`, or `src/transfer.ts` needs a corresponding test. Network and RPC calls are mocked in unit tests; see the existing `vi.mock` patterns in `tests/` for the convention. `pnpm verify:addresses` (`scripts/verify-contract-addresses.mjs`) is the one check that hits live RPC directly (mainnet and testnet); it needs no funded account since it's read-only. The conformance live probe is opt-in and is not run by `pnpm test`.
 
 ---
 
@@ -338,6 +366,7 @@ Pull requests are reviewed within 72 hours of submission. You will receive one o
 pnpm typecheck        # tsc --noEmit
 pnpm test             # vitest
 pnpm build            # tsup, emits ESM + CJS + type declarations to dist/
+node dist/cli-entry.js --help # inspect the operator CLI after a build
 pnpm verify:addresses # confirms src/constants.ts addresses are live on-chain (no funded account needed)
 pnpm smoke            # real end-to-end transfer against a live network (needs funded keys, see Testing Strategy)
 

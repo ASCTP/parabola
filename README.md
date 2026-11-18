@@ -1,8 +1,9 @@
 # Parabola
 
-Parabola is a developer platform for the Arc&harr;Stellar USDC corridor. Today that means an SDK;
-a local dev CLI, gas abstraction, and transfer observability are the direction it's headed as the
-corridor sees real usage. That's a lens on where this goes, not a committed timeline.
+Parabola is a developer platform for the Arc&harr;Stellar USDC corridor. Today that means an SDK,
+a durable execution runtime, chain-event indexing, an operator CLI and HTTP API, and provider
+conformance tooling. Gas abstraction and additional CCTP domains are the direction it is headed
+as the corridor sees real usage. That is a lens on where this goes, not a committed timeline.
 
 The SDK is a TypeScript library for moving native USDC between Circle's Arc network and Stellar
 using CCTP V2. It exists because Stellar is the odd one out in Circle's CCTP ecosystem: inbound
@@ -268,11 +269,138 @@ try {
 }
 ```
 
-### Idempotency is yours to enforce
+### Idempotency is yours to enforce at the raw SDK layer
 
-Parabola does not dedupe, and `completeMint()` will submit again for a burn that was already minted. The second submission is rejected on-chain, because CCTP refuses a re-used message, but you pay gas to learn that.
+The stateless `transfer()` and `completeMint()` entry points do not dedupe. `completeMint()` will submit again for a burn that was already minted. The second submission is rejected on-chain, because CCTP refuses a re-used message, but you pay gas to learn that.
 
 Keep a ledger keyed on the burn hash and network, and return the recorded mint transaction hash for a repeat request instead of resubmitting. If you need to know whether a message was already received for a burn, check Circle's attestation plus the destination chain's own message state rather than calling `completeMint` again to find out.
+
+### Durable execution and indexing
+
+For a service that needs replay-safe execution, leases, and chain-event reconciliation, use the durable runtime subpaths. The root SDK stays stateless; these layers add a store and an operation surface around the same kernel.
+
+```typescript
+import { FileTransferStore } from "@asctp/parabola/execution";
+import { FileIndexerCursorStore } from "@asctp/parabola/indexer";
+import { createSettlementRuntime } from "@asctp/parabola/runtime";
+
+const store = new FileTransferStore(".parabola/transfers");
+const runtime = createSettlementRuntime(store);
+
+const { result } = await runtime.execute(params, {
+  idempotencyKey: "order-123",
+});
+
+await runtime.reconcile({
+  idempotencyKey: "order-123",
+  evidence: { mintTxHash: "0x..." },
+});
+
+const cursors = new FileIndexerCursorStore(".parabola/cursors");
+await runtime.syncArcBurns({
+  network: "mainnet",
+  startBlock: 1_000_000n,
+  confirmations: 12,
+  cursorStore: cursors,
+});
+```
+
+`execute()` claims a lease, persists each kernel progress boundary, and replays a completed record for a repeated key. `reconcile()` applies externally observed burn, attestation, or mint evidence without chain I/O. `syncArcBurns()`, `syncArcMints()`, `syncStellarBurns()`, and `syncStellarMints()` advance durable cursors, verify canonical hashes, and scan only the uncovered range. The file stores are single-host reference implementations; use a shared store when more than one process must coordinate.
+
+The sync wrappers advance a cursor even when no candidates exist, so a transfer created after its burn block was scanned needs an explicit cursor reset or backfill.
+
+## Operations API and CLI
+
+The runtime ships with an HTTP server and a terminal client. Both use the same store and cursor contracts as the embedded runtime, so an operator can inspect and repair records without writing a second application.
+
+```typescript
+import { createApiServer } from "@asctp/parabola/api";
+import { FileTransferStore } from "@asctp/parabola/execution";
+import { FileIndexerCursorStore } from "@asctp/parabola/indexer";
+
+const api = createApiServer({
+  store: new FileTransferStore(".parabola/transfers"),
+  cursorStore: new FileIndexerCursorStore(".parabola/cursors"),
+  token: process.env.PARABOLA_API_TOKEN,
+  host: "127.0.0.1",
+  port: 8787,
+});
+
+await api.listen();
+```
+
+`GET /health` is unauthenticated and returns `{ "status": "ok" }`. Every other route requires `Authorization: Bearer <token>` when a token is configured. The operations routes are:
+
+| Route | Method | Purpose |
+| --- | --- | --- |
+| `/transfers` | `GET` | List stored transfer records |
+| `/transfers/:idempotencyKey` | `GET` | Read one record |
+| `/transfers/:idempotencyKey/reconcile` | `POST` | Apply `burnTxHash`, `attestationHash`, or `mintTxHash` evidence |
+| `/index/:chain/:kind` | `POST` | Scan an Arc block range or Stellar ledger range for `burns` or `mints` |
+| `/sync/:chain/:kind` | `POST` | Advance a durable cursor for `burns` or `mints` |
+
+Request bodies are JSON objects. Block numbers and ledger numbers accept decimal strings or safe integers, and responses serialize `bigint` values as strings. Invalid input returns `400`, a missing record returns `404`, lease and cursor conflicts return `409`, and unauthenticated operations return `401`.
+
+The CLI is published as the `parabola` bin:
+
+```bash
+parabola list --store-dir .parabola/transfers
+parabola reconcile --key order-123 --mint-tx 0x...
+parabola resolve --from arc --burn-tx 0x...
+parabola sync --arc-start-block 1000000 --arc-confirmations 12
+parabola sync --stellar-start-ledger 500000 --watch --interval 15000
+parabola serve --token "$PARABOLA_API_TOKEN" --port 8787
+```
+
+`--json` prints machine-readable output. `sync --watch` runs the indexer worker on an interval and stops cleanly on `SIGINT` or `SIGTERM`. `serve` uses the same shutdown behavior.
+
+## Observability
+
+`@asctp/parabola/observability` defines the instrumentation boundary. `SettlementMetrics` and `SettlementLogger` are the contracts. `MemoryMetrics`, `MemoryLogger`, and `JsonLogger` are reference implementations for tests, local processes, and structured stdout.
+
+```typescript
+import { JsonLogger, MemoryMetrics } from "@asctp/parabola/observability";
+
+const metrics = new MemoryMetrics();
+const logger = new JsonLogger();
+
+logger.log({
+  level: "info",
+  event: "transfer.reconcile.requested",
+  timestamp: Date.now(),
+  fields: { idempotencyKey: "order-123" },
+});
+```
+
+The API records `parabola_api_requests_total` and `parabola_api_request_duration_ms` with method, route, and status labels, and can call `onRequest` for every completed request. The indexer worker records `parabola_indexer_task_total`, `parabola_indexer_task_duration_ms`, `parabola_indexer_cycle_total`, and `parabola_indexer_cycle_duration_ms`. Pass `metrics` to `createApiServer` or `createIndexerWorker` to connect a collector.
+
+## Provider conformance
+
+`@asctp/parabola/conformance` ships the checks a custom `ChainAdapter` or complete `SettlementDependencies` implementation must pass.
+
+```typescript
+import {
+  assertChainAdapterConforms,
+  assertSettlementDependenciesConform,
+  probeChainAdapter,
+} from "@asctp/parabola/conformance";
+import { defaultSettlementDependencies } from "@asctp/parabola/providers";
+
+assertChainAdapterConforms(myAdapter);
+assertSettlementDependenciesConform(myDependencies);
+
+const arcAdapter = defaultSettlementDependencies.chains.arc;
+await probeChainAdapter(arcAdapter, {
+  network: "testnet",
+  amountRaw: 1_000_000n,
+  recipient: "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI",
+  signer: arcSigner, // an ArcSigner funded on testnet
+  message: "0x...",
+  attestation: "0x...",
+});
+```
+
+`assertChainAdapterConforms` is static and safe to run in unit tests. `probeChainAdapter` is an opt-in live check that calls the adapter's burn, mint, and recipient-check paths with the values you provide, so run it on testnet with funded keys. `@asctp/parabola/providers` adds `ChainAdapterRegistry`, which validates adapters, rejects duplicate chains, and builds the `chains` record the kernel consumes.
 
 ## Handling errors
 
@@ -327,8 +455,11 @@ Network configuration used internally:
 ## Known limitations
 
 - **`network` defaults to mainnet.** With `network` omitted, `transfer()` moves real USDC and spends real Arc gas. Pass `network: "testnet"` for development against faucet funds. See [Choosing a network](#choosing-a-network).
-- **`completeMint()` does not dedupe.** A second call for a burn that was already minted submits and is rejected on-chain, costing gas. Keep your own ledger keyed on the burn hash and network. See [Idempotency is yours to enforce](#idempotency-is-yours-to-enforce).
-- **The published tarball ships `dist/` only.** There is no `src/` in the package, so the documented surface is this README, `INTEGRATION.md`, and the type declarations. Questions the README does not answer have no second written source to fall back on.
+- **Raw `transfer()` and `completeMint()` do not dedupe.** A second `completeMint()` call for a burn that was already minted submits and is rejected on-chain, costing gas. Use the durable runtime with an idempotency key, or keep your own ledger keyed on the burn hash and network. See [Idempotency is yours to enforce at the raw SDK layer](#idempotency-is-yours-to-enforce-at-the-raw-sdk-layer).
+- **The reference stores are single-host.** `FileTransferStore` and `FileIndexerCursorStore` coordinate within one host. Use a shared store when multiple processes must claim transfers or advance cursors together.
+- **The HTTP API is an operator surface, not a public gateway.** It has bearer-token authentication and no per-route authorization, rate limiting, TLS termination, or webhook delivery. Put it behind your own ingress and identity layer before exposing it beyond a trusted network.
+- **The metrics and logger contracts are interfaces, not a backend.** `MemoryMetrics`, `MemoryLogger`, and `JsonLogger` are reference implementations. Connect your own Prometheus, OpenTelemetry, or log pipeline through the exported contracts.
+- **The published tarball ships `dist/` only.** There is no `src/` in the package, so the documented surface is this README, `INTEGRATION.md`, `ARCHITECTURE.md`, and the type declarations. Questions those files do not answer have no second written source to fall back on.
 - **Stellar inbound transfers require `CctpForwarder`.** This is a protocol requirement, not a Parabola choice: Circle's CCTP does not support minting directly to a Stellar address, so every transfer landing on Stellar routes through `mint_and_forward`.
 - **No key custody.** Parabola never holds or transmits private keys. Completing a transfer's mint step on the destination chain requires a signer native to that chain (see `destinationSigner` above); Parabola cannot complete it for you without one.
 - **Stellar recipients need a USDC trustline first.** USDC on Stellar is a classic Stellar asset under the hood; any account receiving it for the first time must submit its own `changeTrust` operation before `mint_and_forward` can pay out to it, same as any other Stellar USDC transfer. Parabola cannot establish this on a recipient's behalf (it has no signing relationship with an arbitrary third-party recipient). If the recipient hasn't received USDC on Stellar before, they need to set up the trustline themselves first.
@@ -338,6 +469,7 @@ Network configuration used internally:
 - [circlefin/stellar-cctp](https://github.com/circlefin/stellar-cctp): Circle's official Stellar CCTP contract source and reference TypeScript client (`examples/stellar.ts`, `examples/stellar-utils.ts`). This is the canonical source for contract argument order and hook-data byte layout; check it first before touching `src/chains/stellar.ts` or `src/utils/encoding.ts`'s Stellar-side functions.
 - [CCTP developer docs](https://developers.circle.com/cctp): general CCTP V2 concepts, supported chains and domains, fees.
 - [Arc docs](https://docs.arc.io): Arc network config and contract addresses.
+- [ARCHITECTURE.md](ARCHITECTURE.md) and [docs/adr](docs/adr): the kernel and provider boundary, the durable operation surface, and the provider conformance decision.
 
 ## Development
 
@@ -348,6 +480,7 @@ pnpm test             # vitest (mocked, no network access)
 pnpm typecheck        # tsc --noEmit
 pnpm verify:addresses # confirms every address in src/constants.ts is live on-chain (both networks)
 pnpm smoke            # real end-to-end transfer against live testnet (needs funded keys); NETWORK=mainnet moves real funds
+node dist/cli-entry.js --help # inspect the operator CLI after pnpm build
 ```
 
 See [CONTRIBUTING.md's Testing Strategy](CONTRIBUTING.md#testing-strategy) for what each of these actually catches.
@@ -357,6 +490,8 @@ See [CONTRIBUTING.md's Testing Strategy](CONTRIBUTING.md#testing-strategy) for w
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow (issue templates, branch naming, commit convention, PR process), and the [Code of Conduct](CODE_OF_CONDUCT.md) that governs participation.
 
 For security vulnerabilities, see [SECURITY.md](SECURITY.md) rather than opening a public issue.
+
+If Parabola is useful to you, consider starring the repository.
 
 ## License
 

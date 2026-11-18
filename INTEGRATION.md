@@ -113,11 +113,13 @@ try {
 
 The Stellar recipient check `transfer()` performs is built into `completeMint()` as well, and it reads the account out of the burn message's forward hook rather than accepting a recipient argument. A relayer therefore cannot accidentally preflight a different account than the one that gets paid.
 
-### Idempotency is yours to enforce
+### Idempotency is yours to enforce at the raw SDK layer
 
-Nothing in Parabola dedupes, and `completeMint()` will submit again for a burn that was already minted. The chain rejects the re-used CCTP message, so no funds move, but you pay gas to learn that.
+Nothing in the stateless root SDK dedupes, and `completeMint()` will submit again for a burn that was already minted. The chain rejects the re-used CCTP message, so no funds move, but you pay gas to learn that.
 
 Keep a ledger keyed on `(burn hash, network)` and return the recorded mint transaction hash for a repeated request instead of resubmitting. A relayer is precisely the caller that retries, so this is a required component rather than a nicety.
+
+The durable runtime at `@asctp/parabola/runtime` adds idempotency keys, leases, persisted progress, evidence reconciliation, and cursor-backed indexing around the same kernel. If your service can adopt a `TransferStore`, start there instead of rebuilding that ledger. See [README.md's durable execution section](README.md#durable-execution-and-indexing) and [ARCHITECTURE.md](ARCHITECTURE.md#durable-execution).
 
 ## Network selection in a service
 
