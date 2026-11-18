@@ -4,6 +4,7 @@ import * as execution from "../src/execution/index.js";
 import * as indexer from "../src/indexer/index.js";
 import * as observability from "../src/observability.js";
 import * as providers from "../src/providers/index.js";
+import * as webhooks from "../src/webhooks/index.js";
 
 describe("package subpath exports", () => {
   it("exposes the durable execution surface", () => {
@@ -42,5 +43,15 @@ describe("package subpath exports", () => {
     expect(providers.ChainAdapterRegistry).toBeTypeOf("function");
     expect(providers.ProviderRegistryError).toBeTypeOf("function");
     expect(providers.defaultSettlementDependencies).toBeDefined();
+  });
+
+  it("exposes the webhook surface", () => {
+    expect(webhooks.WebhookDispatcher).toBeTypeOf("function");
+    expect(webhooks.WebhookReplayGuard).toBeTypeOf("function");
+    expect(webhooks.MemoryWebhookDeliveryStore).toBeTypeOf("function");
+    expect(webhooks.FileWebhookDeliveryStore).toBeTypeOf("function");
+    expect(webhooks.signWebhookPayload).toBeTypeOf("function");
+    expect(webhooks.verifyWebhookSignature).toBeTypeOf("function");
+    expect(webhooks.transferWebhookEvent).toBeTypeOf("function");
   });
 });

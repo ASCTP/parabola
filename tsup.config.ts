@@ -10,6 +10,7 @@ export default defineConfig({
     "src/observability.ts",
     "src/conformance/index.ts",
     "src/providers/index.ts",
+    "src/webhooks/index.ts",
     "src/cli-entry.ts",
   ],
   format: ["esm", "cjs"],
