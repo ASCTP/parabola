@@ -254,4 +254,37 @@ describe("parabola CLI", () => {
     ).resolves.toBe(1);
     expect(output.stderr.join("")).toContain("Unexpected argument: extra");
   });
+
+  it("runs the store server until a signal arrives", async () => {
+    const { io, stdout } = capture();
+    const running = main(
+      [
+        "store",
+        "--store-dir",
+        directory,
+        "--cursor-dir",
+        cursorDirectory,
+        "--port",
+        "0",
+      ],
+      io,
+    );
+
+    for (let attempt = 0; attempt < 100 && stdout.length === 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    const match = /Listening on (\S+)/.exec(stdout.join(""));
+    expect(match).not.toBeNull();
+    const response = await fetch(`${match?.[1]}/health`);
+    expect(response.status).toBe(200);
+
+    process.emit("SIGINT");
+    await expect(running).resolves.toBe(0);
+  });
+
+  it("rejects unknown store options", async () => {
+    const { io, stderr } = capture();
+    await expect(main(["store", "--bogus", "1"], io)).resolves.toBe(1);
+    expect(stderr.join("")).toContain("Unknown option: --bogus");
+  });
 });
