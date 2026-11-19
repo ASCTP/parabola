@@ -65,9 +65,7 @@ function stellarLedgerReader(
   network: Network,
   rpcUrl?: string,
 ): StellarLedgerReader {
-  const server = new rpc.Server(
-    rpcUrl ?? stellarConfig(network).sorobanRpcUrl,
-  );
+  const server = new rpc.Server(rpcUrl ?? stellarConfig(network).sorobanRpcUrl);
 
   return {
     getLatestLedger: async () => {
@@ -95,10 +93,7 @@ async function syncStellarIndexer(
   stream: string,
   index: StellarIndexer,
 ): Promise<StellarSyncResult> {
-  if (
-    !Number.isInteger(options.startLedger) ||
-    options.startLedger < 0
-  ) {
+  if (!Number.isInteger(options.startLedger) || options.startLedger < 0) {
     throw new RangeError("startLedger must be a non-negative integer");
   }
 

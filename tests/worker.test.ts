@@ -28,10 +28,7 @@ function arcResult(fromBlock = 1n, toBlock = 2n): ArcSyncResult {
   };
 }
 
-function stellarResult(
-  fromLedger = 1,
-  toLedger = 2,
-): StellarSyncResult {
+function stellarResult(fromLedger = 1, toLedger = 2): StellarSyncResult {
   return {
     summary: EMPTY_SUMMARY,
     fromLedger,
@@ -39,9 +36,7 @@ function stellarResult(
   };
 }
 
-function runtime(
-  overrides: Partial<WorkerRuntime> = {},
-): WorkerRuntime {
+function runtime(overrides: Partial<WorkerRuntime> = {}): WorkerRuntime {
   return {
     syncArcBurns: vi.fn().mockResolvedValue(arcResult()),
     syncArcMints: vi.fn().mockResolvedValue(arcResult()),
@@ -163,34 +158,32 @@ describe("indexer worker", () => {
       syncArcMints: vi.fn().mockRejectedValue(failure),
     });
     const onError = vi.fn();
-    const worker = createIndexerWorker(
-      options({ runtime: source, onError }),
-    );
+    const worker = createIndexerWorker(options({ runtime: source, onError }));
 
     const cycle = await worker.runOnce();
 
-    expect(
-      cycle.tasks.find((task) => task.task === "arc-mints"),
-    ).toMatchObject({
-      ok: false,
-      error: failure,
-    });
-    expect(cycle.tasks.find((task) => task.task === "arc-burns")?.ok).toBe(true);
+    expect(cycle.tasks.find((task) => task.task === "arc-mints")).toMatchObject(
+      {
+        ok: false,
+        error: failure,
+      },
+    );
+    expect(cycle.tasks.find((task) => task.task === "arc-burns")?.ok).toBe(
+      true,
+    );
     expect(onError).toHaveBeenCalledWith(failure, "arc-mints");
   });
 
   it("requires at least one configured stream", () => {
     expect(() =>
-      createIndexerWorker(
-        options({ arc: undefined, stellar: undefined }),
-      ),
+      createIndexerWorker(options({ arc: undefined, stellar: undefined })),
     ).toThrow(/At least one indexer stream/);
   });
 
   it("rejects a non-positive interval", () => {
-    expect(() =>
-      createIndexerWorker(options({ intervalMs: 0 })),
-    ).toThrow(RangeError);
+    expect(() => createIndexerWorker(options({ intervalMs: 0 }))).toThrow(
+      RangeError,
+    );
   });
 
   it("loops until stopped", async () => {

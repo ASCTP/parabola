@@ -12,7 +12,9 @@ import { parseUsdcAmount, formatUsdcAmount } from "./encoding.js";
  * balance, which reports the same asset at 18 decimals; see README's "Amounts and decimals".
  */
 export function decimalsForChain(chain: ChainId): number {
-  return chain === "arc" ? ARC_MAINNET.usdcDecimals : STELLAR_MAINNET.usdcDecimals;
+  return chain === "arc"
+    ? ARC_MAINNET.usdcDecimals
+    : STELLAR_MAINNET.usdcDecimals;
 }
 
 /** Parses a human-readable USDC amount into raw subunits native to the given chain. */

@@ -16,7 +16,12 @@
 import { createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { Keypair } from "@stellar/stellar-sdk";
-import { transfer, arcMainnetChain, arcTestnetChain, TransferError } from "../dist/index.js";
+import {
+  transfer,
+  arcMainnetChain,
+  arcTestnetChain,
+  TransferError,
+} from "../dist/index.js";
 
 const ARC_PRIVATE_KEY = process.env.ARC_PRIVATE_KEY;
 const STELLAR_SECRET_KEY = process.env.STELLAR_SECRET_KEY;
@@ -49,11 +54,18 @@ if (!ARC_PRIVATE_KEY || !STELLAR_SECRET_KEY) {
 const arcChain = NETWORK === "mainnet" ? arcMainnetChain : arcTestnetChain;
 const arcAccount = privateKeyToAccount(ARC_PRIVATE_KEY);
 const arcSigner = {
-  walletClient: createWalletClient({ account: arcAccount, chain: arcChain, transport: http() }),
+  walletClient: createWalletClient({
+    account: arcAccount,
+    chain: arcChain,
+    transport: http(),
+  }),
 };
 
 const stellarKeypair = Keypair.fromSecret(STELLAR_SECRET_KEY);
-const stellarSigner = { publicKey: stellarKeypair.publicKey(), keypair: stellarKeypair };
+const stellarSigner = {
+  publicKey: stellarKeypair.publicKey(),
+  keypair: stellarKeypair,
+};
 
 let failures = 0;
 
@@ -78,7 +90,10 @@ async function runCase(name, params) {
     console.log(`PASS ${name} (${Date.now() - start}ms)`);
   } catch (error) {
     failures++;
-    console.error(`FAIL ${name}:`, error instanceof Error ? error.message : error);
+    console.error(
+      `FAIL ${name}:`,
+      error instanceof Error ? error.message : error,
+    );
 
     // A TransferError means the source-chain burn already succeeded and only a later
     // step (attestation or mint) failed. The funds are recoverable: print the hashes
@@ -117,7 +132,10 @@ if (FROM === "arc" || FROM === "both") {
     speed: "standard",
     signer: arcSigner,
     network: NETWORK,
-    options: { destinationSigner: stellarSigner, stellarRpcUrl: STELLAR_RPC_URL },
+    options: {
+      destinationSigner: stellarSigner,
+      stellarRpcUrl: STELLAR_RPC_URL,
+    },
   });
 }
 

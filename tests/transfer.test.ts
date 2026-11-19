@@ -15,37 +15,45 @@ const getAttestation = vi.fn();
 vi.mock("../src/chains/arc.js", () => ({
   approveUsdcOnArc: (...args: unknown[]) => approveUsdcOnArc(...args),
   burnUsdcOnArc: (...args: unknown[]) => burnUsdcOnArc(...args),
-  burnUsdcOnArcWithStellarForward: (...args: unknown[]) => burnUsdcOnArcWithStellarForward(...args),
+  burnUsdcOnArcWithStellarForward: (...args: unknown[]) =>
+    burnUsdcOnArcWithStellarForward(...args),
   receiveMessageOnArc: (...args: unknown[]) => receiveMessageOnArc(...args),
 }));
 
 vi.mock("../src/chains/stellar.js", () => ({
   approveUsdcOnStellar: (...args: unknown[]) => approveUsdcOnStellar(...args),
   burnUsdcOnStellar: (...args: unknown[]) => burnUsdcOnStellar(...args),
-  mintAndForwardOnStellar: (...args: unknown[]) => mintAndForwardOnStellar(...args),
-  checkStellarRecipientReady: (...args: unknown[]) => checkStellarRecipientReady(...args),
+  mintAndForwardOnStellar: (...args: unknown[]) =>
+    mintAndForwardOnStellar(...args),
+  checkStellarRecipientReady: (...args: unknown[]) =>
+    checkStellarRecipientReady(...args),
 }));
 
 vi.mock("../src/iris/poll.js", () => ({
-  fetchFastTransferFeeBps: (...args: unknown[]) => fetchFastTransferFeeBps(...args),
+  fetchFastTransferFeeBps: (...args: unknown[]) =>
+    fetchFastTransferFeeBps(...args),
   pollForAttestation: (...args: unknown[]) => pollForAttestation(...args),
   getAttestation: (...args: unknown[]) => getAttestation(...args),
 }));
 
-const { transfer, completeMint, resolveBurn } = await import("../src/transfer.js");
-const { TransferError, SubmissionTimeoutError, AttestationNotReadyError } = await import(
-  "../src/errors.js"
+const { transfer, completeMint, resolveBurn } = await import(
+  "../src/transfer.js"
 );
+const { TransferError, SubmissionTimeoutError, AttestationNotReadyError } =
+  await import("../src/errors.js");
 const { encodeStellarForwardHook } = await import("../src/utils/encoding.js");
 
-const FORWARD_RECIPIENT = "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2";
+const FORWARD_RECIPIENT =
+  "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2";
 
 /**
  * Builds a CCTP V2 burn message with the offsets from Circle's MessageV2/BurnMessageV2
  * reference contracts. Only the fields the SDK reads are populated; the rest are zero,
  * which is what a real message carries for an unfilled fee and expiry.
  */
-function buildBurnMessage(options: { forwardRecipient?: string } = {}): `0x${string}` {
+function buildBurnMessage(
+  options: { forwardRecipient?: string } = {},
+): `0x${string}` {
   const header = Buffer.alloc(148);
   header.writeUInt32BE(1, 0);
   header.writeUInt32BE(26, 4);
@@ -57,7 +65,10 @@ function buildBurnMessage(options: { forwardRecipient?: string } = {}): `0x${str
   const hook =
     options.forwardRecipient === undefined
       ? Buffer.alloc(0)
-      : Buffer.from(encodeStellarForwardHook(options.forwardRecipient).slice(2), "hex");
+      : Buffer.from(
+          encodeStellarForwardHook(options.forwardRecipient).slice(2),
+          "hex",
+        );
 
   return `0x${Buffer.concat([header, body, hook]).toString("hex")}`;
 }
@@ -72,7 +83,11 @@ beforeEach(() => {
   burnUsdcOnArcWithStellarForward.mockResolvedValue("0xburnhookhash");
   approveUsdcOnStellar.mockResolvedValue("stellarapprovehash");
   burnUsdcOnStellar.mockResolvedValue("stellarburnhash");
-  checkStellarRecipientReady.mockResolvedValue({ exists: true, hasTrustline: true, ready: true });
+  checkStellarRecipientReady.mockResolvedValue({
+    exists: true,
+    hasTrustline: true,
+    ready: true,
+  });
   pollForAttestation.mockResolvedValue({
     message: buildBurnMessage({ forwardRecipient: FORWARD_RECIPIENT }),
     attestation: "0xattestation",
@@ -125,7 +140,10 @@ describe("transfer (Arc -> Stellar)", () => {
 
   it("converts a burn-step SubmissionTimeoutError into a recoverable TransferError", async () => {
     burnUsdcOnArcWithStellarForward.mockRejectedValueOnce(
-      new SubmissionTimeoutError("Timed out waiting for receipt", "0xburnhookhash"),
+      new SubmissionTimeoutError(
+        "Timed out waiting for receipt",
+        "0xburnhookhash",
+      ),
     );
 
     await expect(
@@ -145,7 +163,9 @@ describe("transfer (Arc -> Stellar)", () => {
   });
 
   it("rethrows a TransferError carrying burnTxHash when the mint step fails", async () => {
-    mintAndForwardOnStellar.mockRejectedValueOnce(new Error("Account not found: GABCD"));
+    mintAndForwardOnStellar.mockRejectedValueOnce(
+      new Error("Account not found: GABCD"),
+    );
 
     await expect(
       transfer({
@@ -165,7 +185,9 @@ describe("transfer (Arc -> Stellar)", () => {
   });
 
   it("rethrows a TransferError carrying burnTxHash when attestation polling fails", async () => {
-    pollForAttestation.mockRejectedValueOnce(new Error("Timed out after 300000ms"));
+    pollForAttestation.mockRejectedValueOnce(
+      new Error("Timed out after 300000ms"),
+    );
 
     let caught: unknown;
     try {
@@ -183,8 +205,12 @@ describe("transfer (Arc -> Stellar)", () => {
     }
 
     expect(caught).toBeInstanceOf(TransferError);
-    expect((caught as InstanceType<typeof TransferError>).burnTxHash).toBe("0xburnhookhash");
-    expect((caught as InstanceType<typeof TransferError>).attestationHash).toBeUndefined();
+    expect((caught as InstanceType<typeof TransferError>).burnTxHash).toBe(
+      "0xburnhookhash",
+    );
+    expect(
+      (caught as InstanceType<typeof TransferError>).attestationHash,
+    ).toBeUndefined();
   });
 
   it("checks Stellar recipient readiness before approving or burning anything on Arc", async () => {
@@ -206,7 +232,11 @@ describe("transfer (Arc -> Stellar)", () => {
   });
 
   it("refuses to burn toward a Stellar recipient that doesn't exist yet", async () => {
-    checkStellarRecipientReady.mockResolvedValue({ exists: false, hasTrustline: false, ready: false });
+    checkStellarRecipientReady.mockResolvedValue({
+      exists: false,
+      hasTrustline: false,
+      ready: false,
+    });
 
     await expect(
       transfer({
@@ -225,7 +255,11 @@ describe("transfer (Arc -> Stellar)", () => {
   });
 
   it("refuses to burn toward a Stellar recipient with no USDC trustline", async () => {
-    checkStellarRecipientReady.mockResolvedValue({ exists: true, hasTrustline: false, ready: false });
+    checkStellarRecipientReady.mockResolvedValue({
+      exists: true,
+      hasTrustline: false,
+      ready: false,
+    });
 
     await expect(
       transfer({
@@ -297,7 +331,9 @@ describe("transfer network selection", () => {
       options: { destinationSigner: stellarSigner },
     });
 
-    expect(burnUsdcOnArcWithStellarForward.mock.calls[0]?.[0].network).toBe("mainnet");
+    expect(burnUsdcOnArcWithStellarForward.mock.calls[0]?.[0].network).toBe(
+      "mainnet",
+    );
     expect(mintAndForwardOnStellar.mock.calls[0]?.[0].network).toBe("mainnet");
     expect(pollForAttestation.mock.calls[0]?.[0].useSandbox).toBe(false);
   });
@@ -319,7 +355,9 @@ describe("transfer network selection", () => {
       "testnet",
       undefined,
     );
-    expect(burnUsdcOnArcWithStellarForward.mock.calls[0]?.[0].network).toBe("testnet");
+    expect(burnUsdcOnArcWithStellarForward.mock.calls[0]?.[0].network).toBe(
+      "testnet",
+    );
     expect(pollForAttestation.mock.calls[0]?.[0].useSandbox).toBe(true);
   });
 
@@ -331,7 +369,10 @@ describe("transfer network selection", () => {
       recipient: "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI",
       speed: "standard",
       signer: arcSigner,
-      options: { destinationSigner: stellarSigner, stellarRpcUrl: "https://my-soroban.example/rpc" },
+      options: {
+        destinationSigner: stellarSigner,
+        stellarRpcUrl: "https://my-soroban.example/rpc",
+      },
     });
 
     expect(checkStellarRecipientReady).toHaveBeenCalledWith(
@@ -339,7 +380,9 @@ describe("transfer network selection", () => {
       "mainnet",
       "https://my-soroban.example/rpc",
     );
-    expect(mintAndForwardOnStellar.mock.calls[0]?.[0].rpcUrl).toBe("https://my-soroban.example/rpc");
+    expect(mintAndForwardOnStellar.mock.calls[0]?.[0].rpcUrl).toBe(
+      "https://my-soroban.example/rpc",
+    );
   });
 
   it("threads an Arc RPC override into the approve and burn calls", async () => {
@@ -350,10 +393,15 @@ describe("transfer network selection", () => {
       recipient: "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI",
       speed: "standard",
       signer: arcSigner,
-      options: { destinationSigner: stellarSigner, arcRpcUrl: "https://my-arc.example/rpc" },
+      options: {
+        destinationSigner: stellarSigner,
+        arcRpcUrl: "https://my-arc.example/rpc",
+      },
     });
 
-    expect(approveUsdcOnArc.mock.calls[0]?.[3]).toBe("https://my-arc.example/rpc");
+    expect(approveUsdcOnArc.mock.calls[0]?.[3]).toBe(
+      "https://my-arc.example/rpc",
+    );
     expect(burnUsdcOnArcWithStellarForward.mock.calls[0]?.[0].rpcUrl).toBe(
       "https://my-arc.example/rpc",
     );
@@ -368,7 +416,9 @@ describe("transfer network selection", () => {
       options: { arcRpcUrl: "https://my-arc.example/rpc" },
     });
 
-    expect(receiveMessageOnArc.mock.calls[0]?.[0].rpcUrl).toBe("https://my-arc.example/rpc");
+    expect(receiveMessageOnArc.mock.calls[0]?.[0].rpcUrl).toBe(
+      "https://my-arc.example/rpc",
+    );
   });
 
   it("leaves the Arc RPC override undefined so the public endpoint is used by default", async () => {
@@ -383,7 +433,9 @@ describe("transfer network selection", () => {
     });
 
     expect(approveUsdcOnArc.mock.calls[0]?.[3]).toBeUndefined();
-    expect(burnUsdcOnArcWithStellarForward.mock.calls[0]?.[0].rpcUrl).toBeUndefined();
+    expect(
+      burnUsdcOnArcWithStellarForward.mock.calls[0]?.[0].rpcUrl,
+    ).toBeUndefined();
   });
 
   it("completeMint defaults to mainnet and polls the production Iris API", async () => {
@@ -411,18 +463,27 @@ describe("attestation-not-ready reporting", () => {
 
   it("stamps an attestation timeout with a code the caller can branch on", async () => {
     pollForAttestation.mockRejectedValueOnce(
-      new AttestationNotReadyError("Timed out after 300000ms", "0xburnhookhash"),
+      new AttestationNotReadyError(
+        "Timed out after 300000ms",
+        "0xburnhookhash",
+      ),
     );
 
     const err = await transfer({ ...arcToStellar }).catch((e) => e);
 
     expect(err).toBeInstanceOf(TransferError);
-    expect((err as InstanceType<typeof TransferError>).code).toBe("ATTESTATION_NOT_READY");
-    expect((err as InstanceType<typeof TransferError>).burnTxHash).toBe("0xburnhookhash");
+    expect((err as InstanceType<typeof TransferError>).code).toBe(
+      "ATTESTATION_NOT_READY",
+    );
+    expect((err as InstanceType<typeof TransferError>).burnTxHash).toBe(
+      "0xburnhookhash",
+    );
   });
 
   it("leaves the code undefined for a failure that is not merely slow", async () => {
-    pollForAttestation.mockRejectedValueOnce(new Error("Iris attestation request failed with 503"));
+    pollForAttestation.mockRejectedValueOnce(
+      new Error("Iris attestation request failed with 503"),
+    );
 
     const err = await transfer({ ...arcToStellar }).catch((e) => e);
 
@@ -431,7 +492,10 @@ describe("attestation-not-ready reporting", () => {
   });
 
   it("throws AttestationNotReadyError from completeMint, unwrapped, when Iris has no attestation", async () => {
-    pollForAttestation.mockResolvedValueOnce({ message: null, attestation: null });
+    pollForAttestation.mockResolvedValueOnce({
+      message: null,
+      attestation: null,
+    });
 
     const err = await completeMint({
       from: "arc",
@@ -441,13 +505,18 @@ describe("attestation-not-ready reporting", () => {
     }).catch((e) => e);
 
     expect(err).toBeInstanceOf(AttestationNotReadyError);
-    expect((err as InstanceType<typeof AttestationNotReadyError>).burnTxHash).toBe("0xburnhookhash");
+    expect(
+      (err as InstanceType<typeof AttestationNotReadyError>).burnTxHash,
+    ).toBe("0xburnhookhash");
     expect(mintAndForwardOnStellar).not.toHaveBeenCalled();
   });
 
   it("propagates an attestation timeout from completeMint with the same type", async () => {
     pollForAttestation.mockRejectedValueOnce(
-      new AttestationNotReadyError("Timed out after 300000ms", "0xburnhookhash"),
+      new AttestationNotReadyError(
+        "Timed out after 300000ms",
+        "0xburnhookhash",
+      ),
     );
 
     await expect(
@@ -470,7 +539,11 @@ describe("completeMint recipient guard", () => {
       signer: stellarSigner,
     });
 
-    expect(checkStellarRecipientReady).toHaveBeenCalledWith(FORWARD_RECIPIENT, "mainnet", undefined);
+    expect(checkStellarRecipientReady).toHaveBeenCalledWith(
+      FORWARD_RECIPIENT,
+      "mainnet",
+      undefined,
+    );
     expect(mintAndForwardOnStellar).toHaveBeenCalledTimes(1);
   });
 
@@ -540,7 +613,9 @@ describe("completeMint options", () => {
       "mainnet",
       "https://my-soroban.example/rpc",
     );
-    expect(mintAndForwardOnStellar.mock.calls[0]?.[0].rpcUrl).toBe("https://my-soroban.example/rpc");
+    expect(mintAndForwardOnStellar.mock.calls[0]?.[0].rpcUrl).toBe(
+      "https://my-soroban.example/rpc",
+    );
   });
 
   it("threads options.pollInterval and options.pollTimeout into attestation polling", async () => {
@@ -573,7 +648,9 @@ describe("completeMint options", () => {
       pollInterval: 250,
       pollTimeout: 30000,
     });
-    expect(mintAndForwardOnStellar.mock.calls[0]?.[0].rpcUrl).toBe("https://legacy-soroban.example/rpc");
+    expect(mintAndForwardOnStellar.mock.calls[0]?.[0].rpcUrl).toBe(
+      "https://legacy-soroban.example/rpc",
+    );
   });
 
   it("prefers options when a caller passes both shapes", async () => {
@@ -584,17 +661,25 @@ describe("completeMint options", () => {
       signer: stellarSigner,
       pollInterval: 250,
       stellarRpcUrl: "https://legacy-soroban.example/rpc",
-      options: { pollInterval: 500, stellarRpcUrl: "https://my-soroban.example/rpc" },
+      options: {
+        pollInterval: 500,
+        stellarRpcUrl: "https://my-soroban.example/rpc",
+      },
     });
 
     expect(pollForAttestation.mock.calls[0]?.[0].pollInterval).toBe(500);
-    expect(mintAndForwardOnStellar.mock.calls[0]?.[0].rpcUrl).toBe("https://my-soroban.example/rpc");
+    expect(mintAndForwardOnStellar.mock.calls[0]?.[0].rpcUrl).toBe(
+      "https://my-soroban.example/rpc",
+    );
   });
 });
 
 describe("resolveBurn", () => {
   it("decodes the burn and reports the account the mint will pay", async () => {
-    const resolved = await resolveBurn({ from: "arc", burnTxHash: "0xburnhookhash" });
+    const resolved = await resolveBurn({
+      from: "arc",
+      burnTxHash: "0xburnhookhash",
+    });
 
     expect(resolved.sourceDomain).toBe(26);
     expect(resolved.destinationDomain).toBe(27);
@@ -609,7 +694,11 @@ describe("resolveBurn", () => {
   });
 
   it("routes a testnet burn to the sandbox Iris environment", async () => {
-    await resolveBurn({ from: "arc", burnTxHash: "0xburnhookhash", network: "testnet" });
+    await resolveBurn({
+      from: "arc",
+      burnTxHash: "0xburnhookhash",
+      network: "testnet",
+    });
 
     expect(getAttestation).toHaveBeenCalledWith({
       sourceDomain: 26,
@@ -624,7 +713,10 @@ describe("resolveBurn", () => {
       attestation: null,
     });
 
-    const resolved = await resolveBurn({ from: "arc", burnTxHash: "0xburnhookhash" });
+    const resolved = await resolveBurn({
+      from: "arc",
+      burnTxHash: "0xburnhookhash",
+    });
 
     expect(resolved.attestation).toBeNull();
     expect(resolved.forwardRecipient).toBe(FORWARD_RECIPIENT);

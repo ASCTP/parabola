@@ -52,9 +52,7 @@ export class WebhookDeliveryStateError extends Error {
   readonly status: WebhookDeliveryStatus;
 
   constructor(deliveryId: string, status: WebhookDeliveryStatus) {
-    super(
-      `Webhook delivery ${deliveryId} is ${status}, not failed`,
-    );
+    super(`Webhook delivery ${deliveryId} is ${status}, not failed`);
     this.name = new.target.name;
     this.deliveryId = deliveryId;
     this.status = status;

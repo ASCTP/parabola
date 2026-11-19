@@ -1,10 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { pad } from "viem";
+import { decodeCctpBurnBody, decodeCctpMessage } from "../src/utils/message.js";
 import {
-  decodeCctpBurnBody,
-  decodeCctpMessage,
-} from "../src/utils/message.js";
-import { decodeStellarForwardHook, encodeStellarForwardHook, stellarAddressToBytes32 } from "../src/utils/encoding.js";
+  decodeStellarForwardHook,
+  encodeStellarForwardHook,
+  stellarAddressToBytes32,
+} from "../src/utils/encoding.js";
 import { ARC_TESTNET, STELLAR_TESTNET } from "../src/constants.js";
 
 /** CCTP left-pads address values inside 32-byte fields. */
@@ -35,7 +36,8 @@ const LIVE_TESTNET_BURN_MESSAGE =
   "0000000000000000000000000000000000000000000000000000000000000038" +
   "47435933504c475a515a57564b51454c573747434851564c565a47524d4749355234484f445836515a4d3745544a5350484246564a505932";
 
-const LIVE_TESTNET_FORWARD_RECIPIENT = "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2";
+const LIVE_TESTNET_FORWARD_RECIPIENT =
+  "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2";
 const LIVE_TESTNET_BURN_BODY = `0x${LIVE_TESTNET_BURN_MESSAGE.slice(2 + 148 * 2)}`;
 
 describe("decodeCctpBurnBody", () => {
@@ -80,15 +82,23 @@ describe("decodeCctpMessage", () => {
   it("reads the header sender as Arc's TokenMessenger and the recipient as Stellar's", () => {
     const decoded = decodeCctpMessage(LIVE_TESTNET_BURN_MESSAGE);
 
-    expect(decoded.sender.toLowerCase()).toBe(paddedAddress(ARC_TESTNET.tokenMessengerV2).toLowerCase());
-    expect(decoded.recipient).toBe(stellarAddressToBytes32(STELLAR_TESTNET.tokenMessengerMinter));
+    expect(decoded.sender.toLowerCase()).toBe(
+      paddedAddress(ARC_TESTNET.tokenMessengerV2).toLowerCase(),
+    );
+    expect(decoded.recipient).toBe(
+      stellarAddressToBytes32(STELLAR_TESTNET.tokenMessengerMinter),
+    );
   });
 
   it("reads the burn body's mintRecipient as the CctpForwarder the SDK routes through", () => {
     const decoded = decodeCctpMessage(LIVE_TESTNET_BURN_MESSAGE);
 
-    expect(decoded.burnToken.toLowerCase()).toBe(paddedAddress(ARC_TESTNET.usdc).toLowerCase());
-    expect(decoded.mintRecipient).toBe(stellarAddressToBytes32(STELLAR_TESTNET.cctpForwarder));
+    expect(decoded.burnToken.toLowerCase()).toBe(
+      paddedAddress(ARC_TESTNET.usdc).toLowerCase(),
+    );
+    expect(decoded.mintRecipient).toBe(
+      stellarAddressToBytes32(STELLAR_TESTNET.cctpForwarder),
+    );
   });
 
   it("resolves the forward hook to the account the mint actually paid", () => {
@@ -107,7 +117,9 @@ describe("decodeCctpMessage", () => {
   });
 
   it("rejects a message shorter than a V2 burn message rather than misreading it", () => {
-    expect(() => decodeCctpMessage("0x00000001")).toThrow(/shorter than the 376-byte/);
+    expect(() => decodeCctpMessage("0x00000001")).toThrow(
+      /shorter than the 376-byte/,
+    );
   });
 
   it("rejects a non-hex message", () => {
@@ -119,7 +131,9 @@ describe("decodeStellarForwardHook", () => {
   it("round-trips every recipient encodeStellarForwardHook produces", () => {
     const encoded = encodeStellarForwardHook(LIVE_TESTNET_FORWARD_RECIPIENT);
 
-    expect(decodeStellarForwardHook(encoded)).toBe(LIVE_TESTNET_FORWARD_RECIPIENT);
+    expect(decodeStellarForwardHook(encoded)).toBe(
+      LIVE_TESTNET_FORWARD_RECIPIENT,
+    );
   });
 
   it("returns undefined for payloads it cannot trust", () => {
@@ -133,7 +147,8 @@ describe("decodeStellarForwardHook", () => {
     // Right shape, but the bytes are not a Stellar strkey.
     expect(
       decodeStellarForwardHook(
-        "0x0000000000000000000000000000000000000000000000000000000000000004" + "6e6f7065",
+        "0x0000000000000000000000000000000000000000000000000000000000000004" +
+          "6e6f7065",
       ),
     ).toBeUndefined();
   });

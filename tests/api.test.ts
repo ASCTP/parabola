@@ -12,8 +12,7 @@ import type { TransferRecord } from "../src/execution/contracts.js";
 import { MemoryTransferStore } from "../src/execution/memory-store.js";
 import { MemoryIndexerCursorStore } from "../src/indexer/cursor.js";
 
-const RECIPIENT =
-  "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2";
+const RECIPIENT = "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2";
 const TOKEN = "secret";
 
 const EMPTY_SUMMARY = {
@@ -77,9 +76,7 @@ function runtime(overrides: Partial<ApiRuntime> = {}): ApiRuntime {
 
 const servers: ApiServer[] = [];
 
-async function start(
-  overrides: Partial<ApiServerOptions> = {},
-): Promise<{
+async function start(overrides: Partial<ApiServerOptions> = {}): Promise<{
   api: ApiServer;
   address: ApiAddress;
   store: MemoryTransferStore;
@@ -111,7 +108,10 @@ function headers(): Record<string, string> {
   };
 }
 
-async function getJson(url: string, init?: RequestInit): Promise<{
+async function getJson(
+  url: string,
+  init?: RequestInit,
+): Promise<{
   status: number;
   body: unknown;
 }> {
@@ -243,7 +243,9 @@ describe("HTTP operations API", () => {
 
     expect(response.status).toBe(400);
     expect(response.body).toMatchObject({
-      error: expect.stringContaining("a burn or mint transaction hash is required"),
+      error: expect.stringContaining(
+        "a burn or mint transaction hash is required",
+      ),
     });
   });
 

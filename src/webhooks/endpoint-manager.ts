@@ -1,7 +1,4 @@
-import type {
-  WebhookEndpoint,
-  WebhookEndpointStore,
-} from "./contracts.js";
+import type { WebhookEndpoint, WebhookEndpointStore } from "./contracts.js";
 import {
   assertWebhookEndpoint,
   assertWebhookEndpoints,

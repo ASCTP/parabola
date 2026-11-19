@@ -52,9 +52,7 @@ describe("file webhook endpoint store", () => {
     await expect(
       store.create(endpoint("orders", { enabled: false })),
     ).resolves.toBe(false);
-    await expect(store.get("orders")).resolves.toEqual(
-      endpoint("orders"),
-    );
+    await expect(store.get("orders")).resolves.toEqual(endpoint("orders"));
   });
 
   it("replaces an endpoint through an atomic temporary file", async () => {

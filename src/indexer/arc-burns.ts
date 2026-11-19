@@ -1,14 +1,8 @@
 import { createPublicClient, http, type Hex } from "viem";
 import { arcMainnetChain, arcTestnetChain } from "../chains/arc.js";
-import {
-  STELLAR_DOMAIN,
-  arcConfig,
-  stellarConfig,
-} from "../constants.js";
+import { STELLAR_DOMAIN, arcConfig, stellarConfig } from "../constants.js";
 import type { TransferRecord, TransferStore } from "../execution/contracts.js";
-import {
-  TransferConflictError,
-} from "../execution/errors.js";
+import { TransferConflictError } from "../execution/errors.js";
 import {
   reconcileTransfer,
   type ReconcileTransferOutcome,
@@ -18,10 +12,7 @@ import {
   encodeStellarForwardHook,
   stellarAddressToBytes32,
 } from "../utils/encoding.js";
-import type {
-  ArcBurnIndexOptions,
-  IndexerSummary,
-} from "./contracts.js";
+import type { ArcBurnIndexOptions, IndexerSummary } from "./contracts.js";
 import { InvalidIndexerRangeError } from "./errors.js";
 
 const depositForBurnEvent = {

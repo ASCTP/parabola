@@ -48,10 +48,7 @@ export class RemoteIndexerCursorStore implements IndexerCursorStore {
   }
 
   async delete(stream: string): Promise<void> {
-    const response = await this.client.request(
-      "DELETE",
-      pathFor(stream),
-    );
+    const response = await this.client.request("DELETE", pathFor(stream));
     ensureOk(response);
   }
 }

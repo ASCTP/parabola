@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { Account, Contract, Keypair, StrKey, nativeToScVal, rpc } from "@stellar/stellar-sdk";
+import {
+  Account,
+  Contract,
+  Keypair,
+  StrKey,
+  nativeToScVal,
+  rpc,
+} from "@stellar/stellar-sdk";
 import {
   burnUsdcOnStellar,
   mintAndForwardOnStellar,
@@ -57,7 +64,9 @@ describe("burnUsdcOnStellar (TokenMessengerMinter.deposit_for_burn)", () => {
 
     expect(hash).toBe(FAKE_HASH);
     expect(callSpy).toHaveBeenCalledTimes(1);
-    expect(contractIdOf(callSpy.mock.instances[0] as unknown as Contract)).toBe(STELLAR_TESTNET.tokenMessengerMinter);
+    expect(contractIdOf(callSpy.mock.instances[0] as unknown as Contract)).toBe(
+      STELLAR_TESTNET.tokenMessengerMinter,
+    );
     expect(callSpy.mock.calls[0]?.[0]).toBe("deposit_for_burn");
   });
 
@@ -65,7 +74,9 @@ describe("burnUsdcOnStellar (TokenMessengerMinter.deposit_for_burn)", () => {
     const signerKeypair = mockHappyPathRpc();
     vi.spyOn(rpc.Server.prototype, "prepareTransaction")
       .mockRejectedValueOnce(
-        new Error('HostError: ... data:["not enough allowance to spend", 0, 10000000] ...'),
+        new Error(
+          'HostError: ... data:["not enough allowance to spend", 0, 10000000] ...',
+        ),
       )
       .mockImplementation(async (tx) => tx as any);
 
@@ -120,7 +131,10 @@ describe("burnUsdcOnStellar (TokenMessengerMinter.deposit_for_burn)", () => {
         mintRecipientBytes32: stellarAddressToBytes32(recipient),
         maxFeeRaw: 1000n,
         minFinalityThreshold: 2000,
-        signer: { publicKey: signerKeypair.publicKey(), keypair: signerKeypair },
+        signer: {
+          publicKey: signerKeypair.publicKey(),
+          keypair: signerKeypair,
+        },
         network: "testnet",
       }),
     ).rejects.toThrow("some unrelated simulation failure");
@@ -130,7 +144,9 @@ describe("burnUsdcOnStellar (TokenMessengerMinter.deposit_for_burn)", () => {
 describe("approveUsdcOnStellar", () => {
   it("waits for the allowance to actually be readable before returning", async () => {
     const signerKeypair = mockHappyPathRpc();
-    vi.spyOn(rpc.Server.prototype, "getLatestLedger").mockResolvedValue({ sequence: 100 } as any);
+    vi.spyOn(rpc.Server.prototype, "getLatestLedger").mockResolvedValue({
+      sequence: 100,
+    } as any);
 
     // Simulates the RPC read-after-write lag this polling exists to cover: the first
     // simulateTransaction call still sees the pre-approval allowance (0), the second
@@ -147,10 +163,14 @@ describe("approveUsdcOnStellar", () => {
         result: { retval: nativeToScVal(10_000_000n, { type: "i128" }) },
       } as any);
 
-    const hash = await approveUsdcOnStellar(10_000_000n, {
-      publicKey: signerKeypair.publicKey(),
-      keypair: signerKeypair,
-    }, "testnet");
+    const hash = await approveUsdcOnStellar(
+      10_000_000n,
+      {
+        publicKey: signerKeypair.publicKey(),
+        keypair: signerKeypair,
+      },
+      "testnet",
+    );
 
     expect(hash).toBe(FAKE_HASH);
     expect(simulate).toHaveBeenCalledTimes(2);
@@ -158,7 +178,9 @@ describe("approveUsdcOnStellar", () => {
 
   it("throws a clear error if the allowance never reflects the approval", async () => {
     mockHappyPathRpc();
-    vi.spyOn(rpc.Server.prototype, "getLatestLedger").mockResolvedValue({ sequence: 100 } as any);
+    vi.spyOn(rpc.Server.prototype, "getLatestLedger").mockResolvedValue({
+      sequence: 100,
+    } as any);
     vi.spyOn(rpc.Server.prototype, "simulateTransaction").mockResolvedValue({
       transactionData: {},
       result: { retval: nativeToScVal(0n, { type: "i128" }) },
@@ -166,7 +188,11 @@ describe("approveUsdcOnStellar", () => {
 
     const signerKeypair = Keypair.random();
     await expect(
-      approveUsdcOnStellar(10_000_000n, { publicKey: signerKeypair.publicKey(), keypair: signerKeypair }, "testnet"),
+      approveUsdcOnStellar(
+        10_000_000n,
+        { publicKey: signerKeypair.publicKey(), keypair: signerKeypair },
+        "testnet",
+      ),
     ).rejects.toThrow(/did not reach/);
   }, 15_000);
 });
@@ -177,14 +203,22 @@ describe("checkStellarRecipientReady", () => {
       new Error("Account not found: G..."),
     );
 
-    const status = await checkStellarRecipientReady(Keypair.random().publicKey());
+    const status = await checkStellarRecipientReady(
+      Keypair.random().publicKey(),
+    );
 
-    expect(status).toEqual({ exists: false, hasTrustline: false, ready: false });
+    expect(status).toEqual({
+      exists: false,
+      hasTrustline: false,
+      ready: false,
+    });
   });
 
   it("reports missing-trustline when the account exists but has never held USDC", async () => {
     const recipient = Keypair.random().publicKey();
-    vi.spyOn(rpc.Server.prototype, "getAccount").mockResolvedValue(new Account(recipient, "1"));
+    vi.spyOn(rpc.Server.prototype, "getAccount").mockResolvedValue(
+      new Account(recipient, "1"),
+    );
     vi.spyOn(rpc.Server.prototype, "simulateTransaction").mockResolvedValue({
       error:
         'HostError: Error(Contract, #13)\n\nEvent log (newest first):\n   0: [Diagnostic Event] ... data:["trustline entry is missing for account", "' +
@@ -199,7 +233,9 @@ describe("checkStellarRecipientReady", () => {
 
   it("reports ready when the account exists and holds the USDC trustline", async () => {
     const recipient = Keypair.random().publicKey();
-    vi.spyOn(rpc.Server.prototype, "getAccount").mockResolvedValue(new Account(recipient, "1"));
+    vi.spyOn(rpc.Server.prototype, "getAccount").mockResolvedValue(
+      new Account(recipient, "1"),
+    );
     vi.spyOn(rpc.Server.prototype, "simulateTransaction").mockResolvedValue({
       transactionData: {},
       result: { retval: nativeToScVal(0n, { type: "i128" }) },
@@ -212,7 +248,9 @@ describe("checkStellarRecipientReady", () => {
 
   it("rethrows an unrelated simulation error instead of misreporting it as a missing trustline", async () => {
     const recipient = Keypair.random().publicKey();
-    vi.spyOn(rpc.Server.prototype, "getAccount").mockResolvedValue(new Account(recipient, "1"));
+    vi.spyOn(rpc.Server.prototype, "getAccount").mockResolvedValue(
+      new Account(recipient, "1"),
+    );
     vi.spyOn(rpc.Server.prototype, "simulateTransaction").mockResolvedValue({
       error: "HostError: some unrelated simulation failure",
     } as any);
@@ -237,7 +275,9 @@ describe("mintAndForwardOnStellar (CctpForwarder.mint_and_forward)", () => {
 
     expect(hash).toBe(FAKE_HASH);
     expect(callSpy).toHaveBeenCalledTimes(1);
-    expect(contractIdOf(callSpy.mock.instances[0] as unknown as Contract)).toBe(STELLAR_TESTNET.cctpForwarder);
+    expect(contractIdOf(callSpy.mock.instances[0] as unknown as Contract)).toBe(
+      STELLAR_TESTNET.cctpForwarder,
+    );
     expect(callSpy.mock.calls[0]?.[0]).toBe("mint_and_forward");
   });
 });

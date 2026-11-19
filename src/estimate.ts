@@ -12,7 +12,9 @@ function domainFor(chain: ChainId): number {
 const STANDARD_DURATION_SECONDS = 20;
 const FAST_DURATION_SECONDS = 15;
 
-export async function estimateFee(params: EstimateFeeParams): Promise<FeeEstimate> {
+export async function estimateFee(
+  params: EstimateFeeParams,
+): Promise<FeeEstimate> {
   if (params.speed === "standard") {
     return {
       protocolFee: "0",

@@ -25,11 +25,7 @@ function copyLabels(
 export class MemoryMetrics implements SettlementMetrics {
   private readonly recorded: MetricSample[] = [];
 
-  counter(
-    name: string,
-    value = 1,
-    labels?: MetricLabels,
-  ): void {
+  counter(name: string, value = 1, labels?: MetricLabels): void {
     this.record(name, "counter", value, labels);
   }
 
@@ -37,11 +33,7 @@ export class MemoryMetrics implements SettlementMetrics {
     this.record(name, "gauge", value, labels);
   }
 
-  histogram(
-    name: string,
-    value: number,
-    labels?: MetricLabels,
-  ): void {
+  histogram(name: string, value: number, labels?: MetricLabels): void {
     this.record(name, "histogram", value, labels);
   }
 

@@ -1,7 +1,4 @@
-import type {
-  IncomingMessage,
-  ServerResponse,
-} from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
 
 export const DEFAULT_MAX_BODY_BYTES = 1_048_576;
 
@@ -20,9 +17,8 @@ export function sendJson(
   status: number,
   body: unknown,
 ): void {
-  const payload = JSON.stringify(
-    body,
-    (_key, value) => (typeof value === "bigint" ? value.toString() : value),
+  const payload = JSON.stringify(body, (_key, value) =>
+    typeof value === "bigint" ? value.toString() : value,
   );
   response.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
@@ -37,10 +33,7 @@ export async function readJson(
 ): Promise<unknown> {
   const contentType = request.headers["content-type"] ?? "";
   if (!contentType.includes("application/json")) {
-    throw new HttpRequestError(
-      415,
-      "Content-Type must be application/json",
-    );
+    throw new HttpRequestError(415, "Content-Type must be application/json");
   }
 
   const chunks: Buffer[] = [];
@@ -64,14 +57,9 @@ export async function readJson(
   }
 }
 
-export function requireObject(
-  value: unknown,
-): Record<string, unknown> {
+export function requireObject(value: unknown): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new HttpRequestError(
-      400,
-      "Request body must be a JSON object",
-    );
+    throw new HttpRequestError(400, "Request body must be a JSON object");
   }
   return value as Record<string, unknown>;
 }
@@ -85,10 +73,7 @@ export function optionalString(
     return undefined;
   }
   if (typeof value !== "string" || value.trim() === "") {
-    throw new HttpRequestError(
-      400,
-      `${name} must be a non-empty string`,
-    );
+    throw new HttpRequestError(400, `${name} must be a non-empty string`);
   }
   return value;
 }
@@ -115,17 +100,10 @@ export function requiredBigInt(
   if (typeof value === "string" && /^\d+$/.test(value)) {
     return BigInt(value);
   }
-  if (
-    typeof value === "number" &&
-    Number.isSafeInteger(value) &&
-    value >= 0
-  ) {
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) {
     return BigInt(value);
   }
-  throw new HttpRequestError(
-    400,
-    `${name} must be a non-negative integer`,
-  );
+  throw new HttpRequestError(400, `${name} must be a non-negative integer`);
 }
 
 export function optionalBigInt(
@@ -143,11 +121,7 @@ export function requiredNumber(
   name: string,
 ): number {
   const value = body[name];
-  if (
-    typeof value === "number" &&
-    Number.isSafeInteger(value) &&
-    value >= 0
-  ) {
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) {
     return value;
   }
   if (typeof value === "string" && /^\d+$/.test(value)) {
@@ -156,10 +130,7 @@ export function requiredNumber(
       return parsed;
     }
   }
-  throw new HttpRequestError(
-    400,
-    `${name} must be a non-negative integer`,
-  );
+  throw new HttpRequestError(400, `${name} must be a non-negative integer`);
 }
 
 export function requiredPositiveInteger(

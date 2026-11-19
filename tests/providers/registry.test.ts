@@ -27,9 +27,7 @@ describe("chain adapter registry", () => {
   });
 
   it("rejects a duplicate chain adapter", () => {
-    const registry = new ChainAdapterRegistry([
-      fakeChainAdapter("arc"),
-    ]);
+    const registry = new ChainAdapterRegistry([fakeChainAdapter("arc")]);
 
     expect(() => registry.register(fakeChainAdapter("arc"))).toThrow(
       ProviderRegistryError,
@@ -43,9 +41,7 @@ describe("chain adapter registry", () => {
       burn: undefined,
     } as unknown as ReturnType<typeof fakeChainAdapter>;
 
-    expect(() => registry.register(adapter)).toThrow(
-      /burn must be a function/,
-    );
+    expect(() => registry.register(adapter)).toThrow(/burn must be a function/);
   });
 
   it("reports a missing adapter instead of returning undefined", () => {

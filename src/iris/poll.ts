@@ -1,6 +1,15 @@
-import { IRIS_MAINNET_BASE_URL, IRIS_SANDBOX_BASE_URL, DEFAULT_POLL_INTERVAL_MS, DEFAULT_POLL_TIMEOUT_MS } from "../constants.js";
+import {
+  IRIS_MAINNET_BASE_URL,
+  IRIS_SANDBOX_BASE_URL,
+  DEFAULT_POLL_INTERVAL_MS,
+  DEFAULT_POLL_TIMEOUT_MS,
+} from "../constants.js";
 import { AttestationNotReadyError, IrisRequestError } from "../errors.js";
-import type { IrisMessage, IrisMessagesResponse, IrisFeesResponse } from "./types.js";
+import type {
+  IrisMessage,
+  IrisMessagesResponse,
+  IrisFeesResponse,
+} from "./types.js";
 
 export function irisBaseUrl(useSandbox: boolean): string {
   return useSandbox ? IRIS_SANDBOX_BASE_URL : IRIS_MAINNET_BASE_URL;
@@ -15,7 +24,9 @@ export async function fetchFastTransferFeeBps(
   const url = `${irisBaseUrl(useSandbox)}burn/USDC/fees/${sourceDomain}/${destDomain}`;
   const res = await fetch(url);
   if (!res.ok) {
-    throw new Error(`Iris fees request failed: ${res.status} ${res.statusText}`);
+    throw new Error(
+      `Iris fees request failed: ${res.status} ${res.statusText}`,
+    );
   }
   const body = (await res.json()) as IrisFeesResponse;
   const fastEntry = body.find((entry) => entry.finalityThreshold <= 1000);
@@ -45,7 +56,10 @@ type PollOutcome =
  * complete: false. Its bytes are already final, so a caller that only needs to know what
  * the burn will do can read it before Circle has signed.
  */
-async function pollOnce(url: string, transactionHash: string): Promise<PollOutcome> {
+async function pollOnce(
+  url: string,
+  transactionHash: string,
+): Promise<PollOutcome> {
   let res: Response;
   try {
     res = await fetch(url);
@@ -85,7 +99,11 @@ async function pollOnce(url: string, transactionHash: string): Promise<PollOutco
   };
 }
 
-function attestationUrl(sourceDomain: number, transactionHash: string, useSandbox: boolean): string {
+function attestationUrl(
+  sourceDomain: number,
+  transactionHash: string,
+  useSandbox: boolean,
+): string {
   return `${irisBaseUrl(useSandbox)}messages/${sourceDomain}?transactionHash=${transactionHash}`;
 }
 
@@ -105,7 +123,11 @@ export async function getAttestation(params: {
   useSandbox: boolean;
 }): Promise<IrisMessage> {
   const outcome = await pollOnce(
-    attestationUrl(params.sourceDomain, params.transactionHash, params.useSandbox),
+    attestationUrl(
+      params.sourceDomain,
+      params.transactionHash,
+      params.useSandbox,
+    ),
     params.transactionHash,
   );
 
@@ -139,7 +161,11 @@ export async function pollForAttestation(params: {
 }): Promise<IrisMessage> {
   const pollInterval = params.pollInterval ?? DEFAULT_POLL_INTERVAL_MS;
   const pollTimeout = params.pollTimeout ?? DEFAULT_POLL_TIMEOUT_MS;
-  const url = attestationUrl(params.sourceDomain, params.transactionHash, params.useSandbox);
+  const url = attestationUrl(
+    params.sourceDomain,
+    params.transactionHash,
+    params.useSandbox,
+  );
 
   const deadline = Date.now() + pollTimeout;
   let consecutiveFailures = 0;

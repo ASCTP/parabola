@@ -1,9 +1,4 @@
-import {
-  BlockNotFoundError,
-  createPublicClient,
-  http,
-  type Hex,
-} from "viem";
+import { BlockNotFoundError, createPublicClient, http, type Hex } from "viem";
 import { arcMainnetChain, arcTestnetChain } from "../chains/arc.js";
 import { arcConfig } from "../constants.js";
 import type { TransferStore } from "../execution/contracts.js";
@@ -57,10 +52,7 @@ function emptySummary(): IndexerSummary {
   };
 }
 
-function arcBlockReader(
-  network: Network,
-  rpcUrl?: string,
-): ArcBlockReader {
+function arcBlockReader(network: Network, rpcUrl?: string): ArcBlockReader {
   const arc = arcConfig(network);
   const chain = network === "mainnet" ? arcMainnetChain : arcTestnetChain;
   const client = createPublicClient({
@@ -109,7 +101,8 @@ async function syncArcIndexer(
     throw new RangeError("reorgWindow must not be negative");
   }
 
-  const reader = options.reader ?? arcBlockReader(options.network, options.rpcUrl);
+  const reader =
+    options.reader ?? arcBlockReader(options.network, options.rpcUrl);
   const latest = await reader.getBlockNumber();
   const tip = latest - BigInt(options.confirmations);
   if (tip < options.startBlock) {
@@ -127,7 +120,11 @@ async function syncArcIndexer(
 
   if (existing) {
     if (existing.blockNumber > tip) {
-      fromBlock = rewindFrom(existing, options.reorgWindow ?? 0n, options.startBlock);
+      fromBlock = rewindFrom(
+        existing,
+        options.reorgWindow ?? 0n,
+        options.startBlock,
+      );
       if (fromBlock > tip) {
         fromBlock = tip;
       }
@@ -139,9 +136,7 @@ async function syncArcIndexer(
           `Cursor block ${existing.blockNumber} for ${stream} was not found on ${options.network}`,
         );
       }
-      if (
-        cursorBlock.hash.toLowerCase() !== existing.blockHash.toLowerCase()
-      ) {
+      if (cursorBlock.hash.toLowerCase() !== existing.blockHash.toLowerCase()) {
         fromBlock = rewindFrom(
           existing,
           options.reorgWindow ?? 0n,

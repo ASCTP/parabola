@@ -123,7 +123,9 @@ export function decodeCctpBurnBody(body: string): CctpBurnBody {
 
   const hookBytes = raw.subarray(BURN_BODY_OFFSET.hookData);
   const hookData =
-    hookBytes.length > 0 ? (`0x${hookBytes.toString("hex")}` as `0x${string}`) : null;
+    hookBytes.length > 0
+      ? (`0x${hookBytes.toString("hex")}` as `0x${string}`)
+      : null;
 
   return {
     burnBodyVersion: raw.readUInt32BE(BURN_BODY_OFFSET.version),
@@ -133,9 +135,13 @@ export function decodeCctpBurnBody(body: string): CctpBurnBody {
     messageSender: readBytes32(raw, BURN_BODY_OFFSET.messageSender),
     maxFeeRaw: BigInt(readBytes32(raw, BURN_BODY_OFFSET.maxFee)),
     feeExecutedRaw: BigInt(readBytes32(raw, BURN_BODY_OFFSET.feeExecuted)),
-    expirationBlockRaw: BigInt(readBytes32(raw, BURN_BODY_OFFSET.expirationBlock)),
+    expirationBlockRaw: BigInt(
+      readBytes32(raw, BURN_BODY_OFFSET.expirationBlock),
+    ),
     hookData,
-    forwardRecipient: hookData ? (decodeStellarForwardHook(hookData) ?? null) : null,
+    forwardRecipient: hookData
+      ? (decodeStellarForwardHook(hookData) ?? null)
+      : null,
   };
 }
 
@@ -154,7 +160,9 @@ export function decodeCctpMessage(message: string): CctpBurnMessage {
 
   const hookBytes = raw.subarray(BODY_OFFSET.hookData);
   const hookData =
-    hookBytes.length > 0 ? (`0x${hookBytes.toString("hex")}` as `0x${string}`) : null;
+    hookBytes.length > 0
+      ? (`0x${hookBytes.toString("hex")}` as `0x${string}`)
+      : null;
 
   return {
     version: raw.readUInt32BE(HEADER_OFFSET.version),
@@ -165,7 +173,9 @@ export function decodeCctpMessage(message: string): CctpBurnMessage {
     recipient: readBytes32(raw, HEADER_OFFSET.recipient),
     destinationCaller: readBytes32(raw, HEADER_OFFSET.destinationCaller),
     minFinalityThreshold: raw.readUInt32BE(HEADER_OFFSET.minFinalityThreshold),
-    finalityThresholdExecuted: raw.readUInt32BE(HEADER_OFFSET.finalityThresholdExecuted),
+    finalityThresholdExecuted: raw.readUInt32BE(
+      HEADER_OFFSET.finalityThresholdExecuted,
+    ),
     burnBodyVersion: raw.readUInt32BE(BODY_OFFSET.version),
     burnToken: readBytes32(raw, BODY_OFFSET.burnToken),
     mintRecipient: readBytes32(raw, BODY_OFFSET.mintRecipient),
@@ -175,6 +185,8 @@ export function decodeCctpMessage(message: string): CctpBurnMessage {
     feeExecutedRaw: BigInt(readBytes32(raw, BODY_OFFSET.feeExecuted)),
     expirationBlockRaw: BigInt(readBytes32(raw, BODY_OFFSET.expirationBlock)),
     hookData,
-    forwardRecipient: hookData ? (decodeStellarForwardHook(hookData) ?? null) : null,
+    forwardRecipient: hookData
+      ? (decodeStellarForwardHook(hookData) ?? null)
+      : null,
   };
 }

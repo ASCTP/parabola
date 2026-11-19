@@ -132,7 +132,12 @@ describe("receiveMessageOnArc", () => {
     const message = `0x${"44".repeat(20)}` as const;
     const attestation = `0x${"55".repeat(65)}` as const;
 
-    const hash = await receiveMessageOnArc({ message, attestation, signer, network: "testnet" });
+    const hash = await receiveMessageOnArc({
+      message,
+      attestation,
+      signer,
+      network: "testnet",
+    });
 
     expect(hash).toBe(FAKE_HASH);
     const call = writeContract.mock.calls[0]?.[0];

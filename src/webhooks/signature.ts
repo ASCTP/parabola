@@ -94,9 +94,7 @@ export function verifyWebhookSignature(
     .update(`${parsed.timestamp}.${options.body}`)
     .digest();
   const actual = Buffer.from(parsed.signature, "hex");
-  return (
-    actual.length === expected.length && timingSafeEqual(actual, expected)
-  );
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
 export class WebhookReplayGuard {

@@ -47,6 +47,10 @@ export interface TransferStore {
     owner: string,
     leaseMs: number,
   ): Promise<TransferClaim>;
-  renew(idempotencyKey: string, owner: string, leaseMs: number): Promise<boolean>;
+  renew(
+    idempotencyKey: string,
+    owner: string,
+    leaseMs: number,
+  ): Promise<boolean>;
   release(idempotencyKey: string, owner: string): Promise<void>;
 }

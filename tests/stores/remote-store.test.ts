@@ -67,9 +67,9 @@ async function start(
 
 describe("remote transfer store", () => {
   it("rejects invalid client urls", () => {
-    expect(
-      () => new RemoteTransferStore({ url: "ftp://example.com" }),
-    ).toThrow(RangeError);
+    expect(() => new RemoteTransferStore({ url: "ftp://example.com" })).toThrow(
+      RangeError,
+    );
     expect(
       () =>
         new RemoteTransferStore({
@@ -95,28 +95,30 @@ describe("remote transfer store", () => {
     await expect(second.get("order-1")).resolves.toEqual(transfer);
     await expect(second.list()).resolves.toEqual([transfer]);
 
-    await expect(
-      first.claim("order-1", "owner-a", 1_000),
-    ).resolves.toEqual({ status: "claimed", record: transfer });
-    await expect(
-      second.claim("order-1", "owner-b", 1_000),
-    ).resolves.toEqual({ status: "busy", record: transfer });
-    await expect(
-      first.renew("order-1", "owner-a", 1_000),
-    ).resolves.toBe(true);
-    await expect(
-      second.renew("order-1", "owner-b", 1_000),
-    ).resolves.toBe(false);
+    await expect(first.claim("order-1", "owner-a", 1_000)).resolves.toEqual({
+      status: "claimed",
+      record: transfer,
+    });
+    await expect(second.claim("order-1", "owner-b", 1_000)).resolves.toEqual({
+      status: "busy",
+      record: transfer,
+    });
+    await expect(first.renew("order-1", "owner-a", 1_000)).resolves.toBe(true);
+    await expect(second.renew("order-1", "owner-b", 1_000)).resolves.toBe(
+      false,
+    );
 
     await second.release("order-1", "owner-b");
-    await expect(
-      second.claim("order-1", "owner-b", 1_000),
-    ).resolves.toEqual({ status: "busy", record: transfer });
+    await expect(second.claim("order-1", "owner-b", 1_000)).resolves.toEqual({
+      status: "busy",
+      record: transfer,
+    });
 
     await first.release("order-1", "owner-a");
-    await expect(
-      second.claim("order-1", "owner-b", 1_000),
-    ).resolves.toEqual({ status: "claimed", record: transfer });
+    await expect(second.claim("order-1", "owner-b", 1_000)).resolves.toEqual({
+      status: "claimed",
+      record: transfer,
+    });
   });
 
   it("updates and deletes records", async () => {
@@ -148,13 +150,9 @@ describe("remote transfer store", () => {
 
     await store.create(transfer);
 
-    await expect(
-      store.get(transfer.idempotencyKey),
-    ).resolves.toEqual(transfer);
+    await expect(store.get(transfer.idempotencyKey)).resolves.toEqual(transfer);
     await store.delete(transfer.idempotencyKey);
-    await expect(
-      store.get(transfer.idempotencyKey),
-    ).resolves.toBeUndefined();
+    await expect(store.get(transfer.idempotencyKey)).resolves.toBeUndefined();
   });
 
   it("requires a bearer token when configured", async () => {
@@ -168,18 +166,16 @@ describe("remote transfer store", () => {
     await expect(anonymous.get("order-1")).rejects.toMatchObject({
       status: 401,
     });
-    await expect(
-      authenticated.get("order-1"),
-    ).resolves.toBeUndefined();
+    await expect(authenticated.get("order-1")).resolves.toBeUndefined();
   });
 
   it("rejects invalid claim and record bodies", async () => {
     const { url } = await start();
     const store = new RemoteTransferStore({ url });
 
-    await expect(
-      store.claim("order-1", "owner-a", 0),
-    ).rejects.toMatchObject({ status: 400 });
+    await expect(store.claim("order-1", "owner-a", 0)).rejects.toMatchObject({
+      status: 400,
+    });
 
     const response = await fetch(`${url}/transfers/order-1`, {
       method: "PUT",
@@ -256,10 +252,8 @@ describe("remote indexer cursor store", () => {
     const response = await fetch(`${url}/cursors/arc:burns`, {
       method: "PUT",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(
-        cursor("stellar:burns"),
-        (_key, value) =>
-          typeof value === "bigint" ? value.toString() : value,
+      body: JSON.stringify(cursor("stellar:burns"), (_key, value) =>
+        typeof value === "bigint" ? value.toString() : value,
       ),
     });
 

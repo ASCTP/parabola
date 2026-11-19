@@ -39,8 +39,13 @@ export function bytes32ToStellarAddress(bytes32: `0x${string}`): string {
  * field beyond the header: the strkey starts right after byte 31. Verified
  * against Circle's reference implementation; re-verify there before changing.
  */
-export function encodeStellarForwardHook(recipientStrkey: string): `0x${string}` {
-  if (!StrKey.isValidEd25519PublicKey(recipientStrkey) && !StrKey.isValidContract(recipientStrkey)) {
+export function encodeStellarForwardHook(
+  recipientStrkey: string,
+): `0x${string}` {
+  if (
+    !StrKey.isValidEd25519PublicKey(recipientStrkey) &&
+    !StrKey.isValidContract(recipientStrkey)
+  ) {
     // A malformed recipient here isn't caught anywhere else: mint_and_forward would
     // fail on-chain eventually, but only after the source-chain burn has already
     // spent real funds. Reject it before that burn is ever submitted.
@@ -78,7 +83,10 @@ export function decodeStellarForwardHook(hookData: string): string | undefined {
     return undefined;
   }
   const strkey = raw.subarray(32, 32 + length).toString("utf8");
-  if (!StrKey.isValidEd25519PublicKey(strkey) && !StrKey.isValidContract(strkey)) {
+  if (
+    !StrKey.isValidEd25519PublicKey(strkey) &&
+    !StrKey.isValidContract(strkey)
+  ) {
     return undefined;
   }
   return strkey;

@@ -3,7 +3,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const fetchFastTransferFeeBps = vi.fn();
 
 vi.mock("../src/iris/poll.js", () => ({
-  fetchFastTransferFeeBps: (...args: unknown[]) => fetchFastTransferFeeBps(...args),
+  fetchFastTransferFeeBps: (...args: unknown[]) =>
+    fetchFastTransferFeeBps(...args),
 }));
 
 const { estimateFee } = await import("../src/estimate.js");
@@ -21,7 +22,10 @@ describe("estimateFee", () => {
       speed: "standard",
     });
 
-    expect(estimate).toMatchObject({ protocolFee: "0", transferMode: "standard" });
+    expect(estimate).toMatchObject({
+      protocolFee: "0",
+      transferMode: "standard",
+    });
     expect(fetchFastTransferFeeBps).not.toHaveBeenCalled();
   });
 
@@ -42,7 +46,12 @@ describe("estimateFee", () => {
   it("defaults to mainnet, quoting fees against the production Iris API", async () => {
     fetchFastTransferFeeBps.mockResolvedValue(10);
 
-    await estimateFee({ from: "arc", to: "stellar", amount: "100", speed: "fast" });
+    await estimateFee({
+      from: "arc",
+      to: "stellar",
+      amount: "100",
+      speed: "fast",
+    });
 
     expect(fetchFastTransferFeeBps).toHaveBeenCalledWith(26, 27, false);
   });
@@ -50,7 +59,13 @@ describe("estimateFee", () => {
   it("quotes against the sandbox Iris API when network is testnet", async () => {
     fetchFastTransferFeeBps.mockResolvedValue(10);
 
-    await estimateFee({ from: "arc", to: "stellar", amount: "100", speed: "fast", network: "testnet" });
+    await estimateFee({
+      from: "arc",
+      to: "stellar",
+      amount: "100",
+      speed: "fast",
+      network: "testnet",
+    });
 
     expect(fetchFastTransferFeeBps).toHaveBeenCalledWith(26, 27, true);
   });

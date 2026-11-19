@@ -7,7 +7,8 @@ import type {
 } from "../src/types.js";
 import type { Keypair } from "@stellar/stellar-sdk";
 
-const STELLAR_ACCOUNT = "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI";
+const STELLAR_ACCOUNT =
+  "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI";
 const EVM_ACCOUNT = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 
 const arcSigner = {} as ArcSigner;
@@ -77,14 +78,28 @@ describe("transfer direction and signer", () => {
 
   it("rejects a Stellar signer on an Arc-sourced transfer", () => {
     // @ts-expect-error an Arc-sourced transfer burns on Arc, so the signer must be an ArcSigner
-    const wrong: TransferParams = { from: "arc", to: "stellar", amount: "10", recipient: STELLAR_ACCOUNT, speed: "standard", signer: keypairSigner };
+    const wrong: TransferParams = {
+      from: "arc",
+      to: "stellar",
+      amount: "10",
+      recipient: STELLAR_ACCOUNT,
+      speed: "standard",
+      signer: keypairSigner,
+    };
 
     expect(wrong.from).toBe("arc");
   });
 
   it("rejects an Arc signer on a Stellar-sourced transfer", () => {
     // @ts-expect-error a Stellar-sourced transfer burns on Stellar, so the signer must be a StellarSigner
-    const wrong: TransferParams = { from: "stellar", to: "arc", amount: "10", recipient: EVM_ACCOUNT, speed: "standard", signer: arcSigner };
+    const wrong: TransferParams = {
+      from: "stellar",
+      to: "arc",
+      amount: "10",
+      recipient: EVM_ACCOUNT,
+      speed: "standard",
+      signer: arcSigner,
+    };
 
     expect(wrong.from).toBe("stellar");
   });
@@ -117,14 +132,30 @@ describe("transfer destination signer", () => {
 
   it("rejects an Arc destination signer for a Stellar mint", () => {
     // @ts-expect-error the mint runs on Stellar, so destinationSigner must be a StellarSigner
-    const wrong: TransferParams = { from: "arc", to: "stellar", amount: "10", recipient: STELLAR_ACCOUNT, speed: "standard", signer: arcSigner, options: { destinationSigner: arcSigner } };
+    const wrong: TransferParams = {
+      from: "arc",
+      to: "stellar",
+      amount: "10",
+      recipient: STELLAR_ACCOUNT,
+      speed: "standard",
+      signer: arcSigner,
+      options: { destinationSigner: arcSigner },
+    };
 
     expect(wrong.to).toBe("stellar");
   });
 
   it("rejects a Stellar destination signer for an Arc mint", () => {
     // @ts-expect-error the mint runs on Arc, so destinationSigner must be an ArcSigner
-    const wrong: TransferParams = { from: "stellar", to: "arc", amount: "10", recipient: EVM_ACCOUNT, speed: "standard", signer: keypairSigner, options: { destinationSigner: keypairSigner } };
+    const wrong: TransferParams = {
+      from: "stellar",
+      to: "arc",
+      amount: "10",
+      recipient: EVM_ACCOUNT,
+      speed: "standard",
+      signer: keypairSigner,
+      options: { destinationSigner: keypairSigner },
+    };
 
     expect(wrong.to).toBe("arc");
   });
@@ -151,14 +182,24 @@ describe("completeMint direction and signer", () => {
 
   it("rejects an Arc signer for a Stellar mint", () => {
     // @ts-expect-error the mint runs on Stellar, so the signer must be a StellarSigner
-    const wrong: CompleteMintParams = { from: "arc", to: "stellar", burnTxHash: "0xburn", signer: arcSigner };
+    const wrong: CompleteMintParams = {
+      from: "arc",
+      to: "stellar",
+      burnTxHash: "0xburn",
+      signer: arcSigner,
+    };
 
     expect(wrong.to).toBe("stellar");
   });
 
   it("rejects a Stellar signer for an Arc mint", () => {
     // @ts-expect-error the mint runs on Arc, so the signer must be an ArcSigner
-    const wrong: CompleteMintParams = { from: "stellar", to: "arc", burnTxHash: "0xburn", signer: keypairSigner };
+    const wrong: CompleteMintParams = {
+      from: "stellar",
+      to: "arc",
+      burnTxHash: "0xburn",
+      signer: keypairSigner,
+    };
 
     expect(wrong.to).toBe("arc");
   });

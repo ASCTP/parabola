@@ -7,10 +7,7 @@ import {
   type ReconcileTransferOutcome,
 } from "../execution/reconciler.js";
 import { toRawAmount } from "../utils/amount.js";
-import type {
-  IndexerSummary,
-  StellarMintIndexOptions,
-} from "./contracts.js";
+import type { IndexerSummary, StellarMintIndexOptions } from "./contracts.js";
 import { InvalidLedgerRangeError } from "./errors.js";
 import { readStellarEvents } from "./stellar-events.js";
 
@@ -23,9 +20,7 @@ interface StellarMintLog {
   amount: bigint;
 }
 
-function decodeMint(
-  event: rpc.Api.EventResponse,
-): StellarMintLog | undefined {
+function decodeMint(event: rpc.Api.EventResponse): StellarMintLog | undefined {
   if (
     event.type !== "contract" ||
     !event.inSuccessfulContractCall ||
@@ -34,9 +29,7 @@ function decodeMint(
     return undefined;
   }
 
-  const name = event.topic[0]
-    ? scValToNative(event.topic[0])
-    : undefined;
+  const name = event.topic[0] ? scValToNative(event.topic[0]) : undefined;
   if (name !== EVENT_NAME) {
     return undefined;
   }
@@ -72,10 +65,7 @@ export async function readStellarMints(
   );
 }
 
-function matchesMint(
-  record: TransferRecord,
-  mint: StellarMintLog,
-): boolean {
+function matchesMint(record: TransferRecord, mint: StellarMintLog): boolean {
   return (
     mint.forwardRecipient === record.recipient &&
     mint.token === stellarConfig(record.network).usdc &&

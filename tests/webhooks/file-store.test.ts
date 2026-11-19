@@ -99,9 +99,7 @@ describe("file webhook delivery store", () => {
     await store.delete("delivery_1");
 
     await expect(store.get("delivery_1")).resolves.toBeUndefined();
-    await expect(
-      store.delete("delivery_1"),
-    ).resolves.toBeUndefined();
+    await expect(store.delete("delivery_1")).resolves.toBeUndefined();
   });
 
   it("encodes unsafe ids and creates nested directories", async () => {
@@ -117,12 +115,8 @@ describe("file webhook delivery store", () => {
 
   it("lists deliveries in due order across store instances", async () => {
     const store = new FileWebhookDeliveryStore(directory);
-    await store.create(
-      delivery("b", { nextAttemptAt: 2_000 }),
-    );
-    await store.create(
-      delivery("a", { nextAttemptAt: 1_000 }),
-    );
+    await store.create(delivery("b", { nextAttemptAt: 2_000 }));
+    await store.create(delivery("a", { nextAttemptAt: 1_000 }));
 
     expect(
       (await new FileWebhookDeliveryStore(directory).list()).map(
@@ -134,9 +128,7 @@ describe("file webhook delivery store", () => {
   it("lists only pending deliveries that are due", async () => {
     const store = new FileWebhookDeliveryStore(directory);
     await store.create(delivery("due", { nextAttemptAt: 1_000 }));
-    await store.create(
-      delivery("future", { nextAttemptAt: 3_000 }),
-    );
+    await store.create(delivery("future", { nextAttemptAt: 3_000 }));
     await store.create(
       delivery("delivered", {
         status: "delivered",
@@ -144,9 +136,9 @@ describe("file webhook delivery store", () => {
       }),
     );
 
-    expect(
-      (await store.listDue(2_000)).map((item) => item.id),
-    ).toEqual(["due"]);
+    expect((await store.listDue(2_000)).map((item) => item.id)).toEqual([
+      "due",
+    ]);
     expect(await store.listDue(2_000, 0)).toEqual([]);
   });
 
@@ -166,23 +158,20 @@ describe("file webhook delivery store", () => {
     );
     await store.create(delivery("pending"));
 
-    expect(
-      (await store.listFailed()).map((item) => item.id),
-    ).toEqual(["earlier", "later"]);
-    expect(
-      (await store.listFailed(1)).map((item) => item.id),
-    ).toEqual(["earlier"]);
+    expect((await store.listFailed()).map((item) => item.id)).toEqual([
+      "earlier",
+      "later",
+    ]);
+    expect((await store.listFailed(1)).map((item) => item.id)).toEqual([
+      "earlier",
+    ]);
   });
 
   it("rejects an invalid due limit", async () => {
     const store = new FileWebhookDeliveryStore(directory);
 
-    await expect(store.listDue(1_000, -1)).rejects.toThrow(
-      RangeError,
-    );
-    await expect(store.listDue(1_000, 1.5)).rejects.toThrow(
-      RangeError,
-    );
+    await expect(store.listDue(1_000, -1)).rejects.toThrow(RangeError);
+    await expect(store.listDue(1_000, 1.5)).rejects.toThrow(RangeError);
     await expect(store.listFailed(-1)).rejects.toThrow(RangeError);
   });
 });

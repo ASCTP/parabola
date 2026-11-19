@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { fetchFastTransferFeeBps, pollForAttestation } from "../src/iris/poll.js";
+import {
+  fetchFastTransferFeeBps,
+  pollForAttestation,
+} from "../src/iris/poll.js";
 import { AttestationNotReadyError, IrisRequestError } from "../src/errors.js";
 
 const COMPLETE_BODY = {
@@ -7,7 +10,9 @@ const COMPLETE_BODY = {
 };
 
 const PENDING_BODY = {
-  messages: [{ status: "pending_confirmations", attestation: null, message: null }],
+  messages: [
+    { status: "pending_confirmations", attestation: null, message: null },
+  ],
 };
 
 function okResponse(body: unknown) {
@@ -29,7 +34,11 @@ function scriptFetch(responses: unknown[]) {
   return calls;
 }
 
-const POLL = { sourceDomain: 26, transactionHash: "0xburn", useSandbox: true } as const;
+const POLL = {
+  sourceDomain: 26,
+  transactionHash: "0xburn",
+  useSandbox: true,
+} as const;
 
 describe("fetchFastTransferFeeBps", () => {
   const originalFetch = global.fetch;
@@ -74,7 +83,9 @@ describe("fetchFastTransferFeeBps", () => {
       statusText: "Internal Server Error",
     }) as unknown as typeof fetch;
 
-    await expect(fetchFastTransferFeeBps(26, 27, true)).rejects.toThrow("Iris fees request failed");
+    await expect(fetchFastTransferFeeBps(26, 27, true)).rejects.toThrow(
+      "Iris fees request failed",
+    );
   });
 });
 
@@ -94,7 +105,11 @@ describe("pollForAttestation", () => {
       okResponse(COMPLETE_BODY),
     ]);
 
-    const message = await pollForAttestation({ ...POLL, pollInterval: 1, pollTimeout: 1000 });
+    const message = await pollForAttestation({
+      ...POLL,
+      pollInterval: 1,
+      pollTimeout: 1000,
+    });
 
     expect(message.attestation).toBe("0xabc");
     expect(calls.count).toBe(3);
@@ -103,9 +118,11 @@ describe("pollForAttestation", () => {
   it("throws AttestationNotReadyError when the deadline passes without an attestation", async () => {
     scriptFetch([okResponse(PENDING_BODY)]);
 
-    const err = await pollForAttestation({ ...POLL, pollInterval: 1, pollTimeout: 20 }).catch(
-      (e) => e,
-    );
+    const err = await pollForAttestation({
+      ...POLL,
+      pollInterval: 1,
+      pollTimeout: 20,
+    }).catch((e) => e);
 
     expect(err).toBeInstanceOf(AttestationNotReadyError);
     expect((err as AttestationNotReadyError).burnTxHash).toBe("0xburn");
@@ -114,20 +131,26 @@ describe("pollForAttestation", () => {
   it("surfaces a persistent 5xx as IrisRequestError instead of absorbing it into the timeout", async () => {
     scriptFetch([errorResponse(503)]);
 
-    const err = await pollForAttestation({ ...POLL, pollInterval: 1, pollTimeout: 10_000 }).catch(
-      (e) => e,
-    );
+    const err = await pollForAttestation({
+      ...POLL,
+      pollInterval: 1,
+      pollTimeout: 10_000,
+    }).catch((e) => e);
 
     expect(err).toBeInstanceOf(IrisRequestError);
     expect((err as IrisRequestError).status).toBe(503);
   });
 
   it("surfaces a transport failure as IrisRequestError when it persists", async () => {
-    global.fetch = vi.fn().mockRejectedValue(new Error("ECONNRESET")) as unknown as typeof fetch;
+    global.fetch = vi
+      .fn()
+      .mockRejectedValue(new Error("ECONNRESET")) as unknown as typeof fetch;
 
-    const err = await pollForAttestation({ ...POLL, pollInterval: 1, pollTimeout: 10_000 }).catch(
-      (e) => e,
-    );
+    const err = await pollForAttestation({
+      ...POLL,
+      pollInterval: 1,
+      pollTimeout: 10_000,
+    }).catch((e) => e);
 
     expect(err).toBeInstanceOf(IrisRequestError);
     expect((err as IrisRequestError).status).toBeUndefined();
@@ -136,7 +159,11 @@ describe("pollForAttestation", () => {
   it("rides out an isolated failure and still resolves", async () => {
     scriptFetch([errorResponse(500), okResponse(COMPLETE_BODY)]);
 
-    const message = await pollForAttestation({ ...POLL, pollInterval: 1, pollTimeout: 1000 });
+    const message = await pollForAttestation({
+      ...POLL,
+      pollInterval: 1,
+      pollTimeout: 1000,
+    });
 
     expect(message.attestation).toBe("0xabc");
   });
@@ -157,7 +184,11 @@ describe("pollForAttestation", () => {
       okResponse(COMPLETE_BODY),
     ]);
 
-    const message = await pollForAttestation({ ...POLL, pollInterval: 1, pollTimeout: 5000 });
+    const message = await pollForAttestation({
+      ...POLL,
+      pollInterval: 1,
+      pollTimeout: 5000,
+    });
 
     expect(message.attestation).toBe("0xabc");
   });

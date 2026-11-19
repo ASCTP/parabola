@@ -59,14 +59,18 @@ describe("encodeStellarForwardHook", () => {
     expect(() => encodeStellarForwardHook("not-a-stellar-address")).toThrow(
       /Invalid Stellar address/,
     );
-    expect(() => encodeStellarForwardHook("GTRUNCATED")).toThrow(/Invalid Stellar address/);
+    expect(() => encodeStellarForwardHook("GTRUNCATED")).toThrow(
+      /Invalid Stellar address/,
+    );
   });
 });
 
 describe("evmAddressToBytes32", () => {
   it("pads a valid 20-byte EVM address to 32 bytes", () => {
     const address = `0x${"1".repeat(39)}C`; // 40 hex chars, verified by construction
-    expect(evmAddressToBytes32(address)).toBe(`0x000000000000000000000000${address.slice(2)}`);
+    expect(evmAddressToBytes32(address)).toBe(
+      `0x000000000000000000000000${address.slice(2)}`,
+    );
   });
 
   // Before this validation existed, viem's pad() would silently accept a truncated
@@ -77,13 +81,15 @@ describe("evmAddressToBytes32", () => {
   });
 
   it("throws on a non-hex string instead of silently encoding it", () => {
-    expect(() => evmAddressToBytes32("not-a-hex-address")).toThrow(/Invalid EVM address/);
+    expect(() => evmAddressToBytes32("not-a-hex-address")).toThrow(
+      /Invalid EVM address/,
+    );
   });
 
   it("throws on an address missing the 0x prefix", () => {
-    expect(() => evmAddressToBytes32("70997970C51812dc3A010C7d01b50e0d17dc79C")).toThrow(
-      /Invalid EVM address/,
-    );
+    expect(() =>
+      evmAddressToBytes32("70997970C51812dc3A010C7d01b50e0d17dc79C"),
+    ).toThrow(/Invalid EVM address/);
   });
 });
 

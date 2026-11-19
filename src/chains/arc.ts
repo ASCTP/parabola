@@ -100,7 +100,10 @@ const erc20Abi = [
  */
 function publicClient(network: Network, rpcUrl?: string) {
   const chain = chainFor(network);
-  return createPublicClient({ chain, transport: http(rpcUrl ?? arcConfig(network).rpcUrl) });
+  return createPublicClient({
+    chain,
+    transport: http(rpcUrl ?? arcConfig(network).rpcUrl),
+  });
 }
 
 type WriteContractRequest = Omit<

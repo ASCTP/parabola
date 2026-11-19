@@ -5,8 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { TransferRecord } from "../../src/execution/contracts.js";
 import { FileTransferStore } from "../../src/execution/file-store.js";
 
-const RECIPIENT =
-  "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2";
+const RECIPIENT = "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2";
 
 function record(overrides: Partial<TransferRecord> = {}): TransferRecord {
   return {
@@ -45,9 +44,9 @@ describe("file transfer store", () => {
     const store = new FileTransferStore(directory);
 
     await expect(store.create(expected)).resolves.toBe(true);
-    await expect(new FileTransferStore(directory).get("order-1")).resolves.toEqual(
-      expected,
-    );
+    await expect(
+      new FileTransferStore(directory).get("order-1"),
+    ).resolves.toEqual(expected);
   });
 
   it("does not overwrite a record that already exists", async () => {
@@ -100,7 +99,9 @@ describe("file transfer store", () => {
     await store.create(record({ idempotencyKey: "order-1", createdAt: 1 }));
     await store.claim("order-1", "owner-a", 60_000);
 
-    await expect(new FileTransferStore(directory).list()).resolves.toMatchObject([
+    await expect(
+      new FileTransferStore(directory).list(),
+    ).resolves.toMatchObject([
       { idempotencyKey: "order-1" },
       { idempotencyKey: "order-2" },
     ]);
@@ -138,9 +139,12 @@ describe("file transfer store", () => {
     const store = new FileTransferStore(directory);
     await store.create(record());
 
-    await expect(store.claim("order-1", "owner-a", 60_000)).resolves.toMatchObject(
-      { status: "claimed", record: { idempotencyKey: "order-1" } },
-    );
+    await expect(
+      store.claim("order-1", "owner-a", 60_000),
+    ).resolves.toMatchObject({
+      status: "claimed",
+      record: { idempotencyKey: "order-1" },
+    });
     await expect(
       new FileTransferStore(directory).claim("order-1", "owner-b", 60_000),
     ).resolves.toMatchObject({ status: "busy" });
@@ -151,7 +155,9 @@ describe("file transfer store", () => {
     await store.claim("order-1", "owner-a", 60_000);
 
     await expect(store.renew("order-1", "owner-a", 60_000)).resolves.toBe(true);
-    await expect(store.renew("order-1", "owner-b", 60_000)).resolves.toBe(false);
+    await expect(store.renew("order-1", "owner-b", 60_000)).resolves.toBe(
+      false,
+    );
   });
 
   it("releases a lease and allows another owner to claim", async () => {
@@ -160,19 +166,21 @@ describe("file transfer store", () => {
 
     await store.release("order-1", "owner-a");
 
-    await expect(store.claim("order-1", "owner-b", 60_000)).resolves.toMatchObject(
-      { status: "claimed" },
-    );
+    await expect(
+      store.claim("order-1", "owner-b", 60_000),
+    ).resolves.toMatchObject({ status: "claimed" });
   });
 
   it("reclaims an expired lease", async () => {
     const store = new FileTransferStore(directory);
     await store.claim("order-1", "owner-a", 0);
 
-    await expect(store.claim("order-1", "owner-b", 60_000)).resolves.toMatchObject(
-      { status: "claimed" },
+    await expect(
+      store.claim("order-1", "owner-b", 60_000),
+    ).resolves.toMatchObject({ status: "claimed" });
+    await expect(store.renew("order-1", "owner-a", 60_000)).resolves.toBe(
+      false,
     );
-    await expect(store.renew("order-1", "owner-a", 60_000)).resolves.toBe(false);
   });
 
   it("serializes concurrent claims across store instances", async () => {

@@ -2,9 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { TransferRecord } from "../../src/execution/contracts.js";
 import { transferWebhookEvent } from "../../src/webhooks/transfer-event.js";
 
-function record(
-  overrides: Partial<TransferRecord> = {},
-): TransferRecord {
+function record(overrides: Partial<TransferRecord> = {}): TransferRecord {
   return {
     idempotencyKey: "order-1",
     phase: "minted",
@@ -12,8 +10,7 @@ function record(
     to: "stellar",
     network: "mainnet",
     amount: "10",
-    recipient:
-      "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2",
+    recipient: "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2",
     createdAt: 1_000,
     updatedAt: 2_000,
     ...overrides,
@@ -22,21 +19,21 @@ function record(
 
 describe("transfer webhook events", () => {
   it("maps terminal phases to event types", () => {
-    expect(
-      transferWebhookEvent(record({ phase: "minted" })).type,
-    ).toBe("transfer.minted");
-    expect(
-      transferWebhookEvent(record({ phase: "pending" })).type,
-    ).toBe("transfer.pending");
-    expect(
-      transferWebhookEvent(record({ phase: "recoverable" })).type,
-    ).toBe("transfer.recoverable");
-    expect(
-      transferWebhookEvent(record({ phase: "failed" })).type,
-    ).toBe("transfer.failed");
-    expect(
-      transferWebhookEvent(record({ phase: "burning" })).type,
-    ).toBe("transfer.updated");
+    expect(transferWebhookEvent(record({ phase: "minted" })).type).toBe(
+      "transfer.minted",
+    );
+    expect(transferWebhookEvent(record({ phase: "pending" })).type).toBe(
+      "transfer.pending",
+    );
+    expect(transferWebhookEvent(record({ phase: "recoverable" })).type).toBe(
+      "transfer.recoverable",
+    );
+    expect(transferWebhookEvent(record({ phase: "failed" })).type).toBe(
+      "transfer.failed",
+    );
+    expect(transferWebhookEvent(record({ phase: "burning" })).type).toBe(
+      "transfer.updated",
+    );
   });
 
   it("uses the record as the event data without sharing the result", () => {
@@ -76,9 +73,9 @@ describe("transfer webhook events", () => {
   });
 
   it("rejects an empty id and a non-finite timestamp", () => {
-    expect(() =>
-      transferWebhookEvent(record(), { id: "" }),
-    ).toThrow(RangeError);
+    expect(() => transferWebhookEvent(record(), { id: "" })).toThrow(
+      RangeError,
+    );
     expect(() =>
       transferWebhookEvent(record(), {
         createdAt: Number.POSITIVE_INFINITY,

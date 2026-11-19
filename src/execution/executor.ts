@@ -154,10 +154,7 @@ function progressWriter(
   };
 }
 
-function rethrowProgressError(
-  err: unknown,
-  record: TransferRecord,
-): void {
+function rethrowProgressError(err: unknown, record: TransferRecord): void {
   if (err instanceof TransferProgressError) {
     if (
       err.cause instanceof TransferPersistenceError ||
@@ -351,7 +348,9 @@ export async function executeTransfer(
     if (!(await store.create(record))) {
       const raced = await store.get(idempotencyKey);
       if (!raced) {
-        throw new Error(`Transfer ${idempotencyKey} disappeared from the store`);
+        throw new Error(
+          `Transfer ${idempotencyKey} disappeared from the store`,
+        );
       }
       return await resolveClaimedRecord(
         kernel,
