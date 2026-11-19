@@ -64,13 +64,12 @@ describe("memory webhook delivery store", () => {
     await store.create(record);
 
     const first = await store.get("delivery_1");
-    (first?.event.data as { nested: { value: number } }).nested.value = 2;
+    const firstData = first?.event.data as { nested: { value: number } };
+    firstData.nested.value = 2;
 
     const second = await store.get("delivery_1");
-    expect(
-      (second?.event.data as { nested: { value: number } }).nested
-        .value,
-    ).toBe(1);
+    const secondData = second?.event.data as { nested: { value: number } };
+    expect(secondData.nested.value).toBe(1);
   });
 
   it("lists deliveries in due order", async () => {

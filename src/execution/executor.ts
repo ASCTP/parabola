@@ -213,7 +213,7 @@ async function resumeTransfer(
     options: params.options,
   } as unknown as CompleteMintParams;
 
-  let completed;
+  let completed: Awaited<ReturnType<typeof kernel.completeMint>>;
   try {
     completed = await kernel.completeMint(resumeParams, {
       onProgress: progressWriter(store, record, owner, leaseMs),

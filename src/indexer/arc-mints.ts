@@ -82,7 +82,7 @@ function matchesMint(
     return false;
   }
 
-  let body;
+  let body: ReturnType<typeof decodeCctpBurnBody>;
   try {
     body = decodeCctpBurnBody(args.messageBody);
   } catch {

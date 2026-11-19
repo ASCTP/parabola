@@ -18,7 +18,7 @@ const {
 } = await import("../src/chains/arc.js");
 const { ARC_TESTNET, ARC_MAINNET } = await import("../src/constants.js");
 
-const FAKE_HASH = "0x" + "a".repeat(64);
+const FAKE_HASH = `0x${"a".repeat(64)}`;
 const ZERO_BYTES32 = `0x${"0".repeat(64)}`;
 
 function makeSigner() {

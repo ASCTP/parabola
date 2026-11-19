@@ -1,4 +1,4 @@
-import { concat, numberToHex, pad, type Hex } from "viem";
+import { concat, numberToHex, type Hex } from "viem";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TransferRecord } from "../../src/execution/contracts.js";
 

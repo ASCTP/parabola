@@ -1,7 +1,7 @@
 import {
   Address,
   nativeToScVal,
-  rpc,
+  type rpc,
   xdr,
 } from "@stellar/stellar-sdk";
 import type { Hex } from "viem";

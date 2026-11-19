@@ -149,7 +149,7 @@ export async function checkStellarRecipientReady(
   const stellar = stellarConfig(network);
   const server = getServer(network, rpcUrl);
 
-  let account;
+  let account: Awaited<ReturnType<typeof server.getAccount>>;
   try {
     account = await server.getAccount(recipient);
   } catch {
