@@ -32,10 +32,7 @@ export interface StellarWorkerStreamOptions {
 export interface IndexerWorkerOptions {
   runtime: Pick<
     SettlementRuntime,
-    | "syncArcBurns"
-    | "syncArcMints"
-    | "syncStellarBurns"
-    | "syncStellarMints"
+    "syncArcBurns" | "syncArcMints" | "syncStellarBurns" | "syncStellarMints"
   >;
   cursorStore: IndexerCursorStore;
   arc?: ArcWorkerStreamOptions;

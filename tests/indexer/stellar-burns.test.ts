@@ -1,9 +1,4 @@
-import {
-  Address,
-  nativeToScVal,
-  rpc,
-  xdr,
-} from "@stellar/stellar-sdk";
+import { Address, nativeToScVal, type rpc, xdr } from "@stellar/stellar-sdk";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TransferRecord } from "../../src/execution/contracts.js";
 import { MemoryTransferStore } from "../../src/execution/memory-store.js";
@@ -20,8 +15,7 @@ import {
 import { evmAddressToBytes32 } from "../../src/utils/encoding.js";
 import type { StellarEventReader } from "../../src/indexer/contracts.js";
 
-const DEPOSITOR =
-  "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2";
+const DEPOSITOR = "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2";
 const RECIPIENT = "0x2222222222222222222222222222222222222222";
 const MINT_RECIPIENT = evmAddressToBytes32(RECIPIENT);
 const BURN_HASH = "stellar-burn-1";
@@ -58,8 +52,7 @@ function event(
   const burnToken = overrides.burnToken ?? STELLAR_MAINNET.usdc;
   const depositor = overrides.depositor ?? DEPOSITOR;
   const amount = overrides.amount ?? 10_000_000n;
-  const mintRecipient =
-    overrides.mintRecipient ?? MINT_RECIPIENT;
+  const mintRecipient = overrides.mintRecipient ?? MINT_RECIPIENT;
   const destinationDomain = overrides.destinationDomain ?? ARC_DOMAIN;
 
   return {
@@ -315,7 +308,9 @@ describe("Stellar burn indexer", () => {
     });
 
     expect(burns).toHaveLength(201);
-    expect((source.getEvents as ReturnType<typeof vi.fn>)).toHaveBeenNthCalledWith(
+    expect(
+      source.getEvents as ReturnType<typeof vi.fn>,
+    ).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ cursor: "cursor-1", limit: 200 }),
     );
@@ -323,16 +318,14 @@ describe("Stellar burn indexer", () => {
 
   it("stops at events beyond the requested ledger range", async () => {
     const source = {
-      getEvents: vi
-        .fn()
-        .mockResolvedValueOnce({
-          events: Array.from({ length: 200 }, () => event({ ledger: 21 })),
-          cursor: "cursor-1",
-          latestLedger: 100,
-          oldestLedger: 1,
-          latestLedgerCloseTime: "",
-          oldestLedgerCloseTime: "",
-        }),
+      getEvents: vi.fn().mockResolvedValueOnce({
+        events: Array.from({ length: 200 }, () => event({ ledger: 21 })),
+        cursor: "cursor-1",
+        latestLedger: 100,
+        oldestLedger: 1,
+        latestLedgerCloseTime: "",
+        oldestLedgerCloseTime: "",
+      }),
     } as unknown as StellarEventReader;
 
     const burns = await readStellarBurns({

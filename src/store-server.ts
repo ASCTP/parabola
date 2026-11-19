@@ -4,10 +4,7 @@ import {
   type Server,
   type ServerResponse,
 } from "node:http";
-import type {
-  TransferRecord,
-  TransferStore,
-} from "./execution/contracts.js";
+import type { TransferRecord, TransferStore } from "./execution/contracts.js";
 import {
   InvalidIdempotencyKeyError,
   TransferConflictError,
@@ -25,10 +22,7 @@ import {
   requiredString,
   sendJson,
 } from "./http-json.js";
-import type {
-  IndexerCursor,
-  IndexerCursorStore,
-} from "./indexer/cursor.js";
+import type { IndexerCursor, IndexerCursorStore } from "./indexer/cursor.js";
 import {
   IndexerCursorError,
   InvalidIndexerCursorError,
@@ -103,8 +97,7 @@ function routeFor(path: string): string {
   if (path === "/health" || path === "/transfers") {
     return path;
   }
-  const actionMatch =
-    /^\/transfers\/[^/]+\/(claim|renew|release)$/.exec(path);
+  const actionMatch = /^\/transfers\/[^/]+\/(claim|renew|release)$/.exec(path);
   if (actionMatch) {
     return `/transfers/:idempotencyKey/${actionMatch[1] as string}`;
   }
@@ -145,9 +138,7 @@ function sendNoContent(response: ServerResponse): void {
   response.end();
 }
 
-function requireTransferRecord(
-  body: Record<string, unknown>,
-): TransferRecord {
+function requireTransferRecord(body: Record<string, unknown>): TransferRecord {
   const idempotencyKey = requiredString(body, "idempotencyKey");
   const createdAt = requiredNumber(body, "createdAt");
   const updatedAt = requiredNumber(body, "updatedAt");
@@ -159,9 +150,7 @@ function requireTransferRecord(
   } as TransferRecord;
 }
 
-function requireCursor(
-  body: Record<string, unknown>,
-): IndexerCursor {
+function requireCursor(body: Record<string, unknown>): IndexerCursor {
   return {
     stream: requiredString(body, "stream"),
     blockNumber: requiredBigInt(body, "blockNumber"),
@@ -176,8 +165,7 @@ async function handle(
   options: StoreServerOptions,
 ): Promise<void> {
   const path = requestPath(request);
-  const maxBodyBytes =
-    options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
+  const maxBodyBytes = options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
 
   if (path === "/health") {
     if (request.method !== "GET") {
@@ -215,20 +203,17 @@ async function handle(
     return;
   }
 
-  const actionMatch =
-    /^\/transfers\/([^/]+)\/(claim|renew|release)$/.exec(path);
+  const actionMatch = /^\/transfers\/([^/]+)\/(claim|renew|release)$/.exec(
+    path,
+  );
   if (actionMatch) {
     if (request.method !== "POST") {
       methodNotAllowed(response);
       return;
     }
-    const idempotencyKey = decodeSegment(
-      actionMatch[1] as string,
-    );
+    const idempotencyKey = decodeSegment(actionMatch[1] as string);
     const action = actionMatch[2] as "claim" | "renew" | "release";
-    const body = requireObject(
-      await readJson(request, maxBodyBytes),
-    );
+    const body = requireObject(await readJson(request, maxBodyBytes));
 
     if (action === "claim") {
       const claim = await options.transferStore.claim(
@@ -260,9 +245,7 @@ async function handle(
 
   const transferMatch = /^\/transfers\/([^/]+)$/.exec(path);
   if (transferMatch) {
-    const idempotencyKey = decodeSegment(
-      transferMatch[1] as string,
-    );
+    const idempotencyKey = decodeSegment(transferMatch[1] as string);
 
     if (request.method === "GET") {
       const record = await options.transferStore.get(idempotencyKey);
@@ -325,10 +308,7 @@ async function handle(
         requireObject(await readJson(request, maxBodyBytes)),
       );
       if (cursor.stream !== stream) {
-        throw new HttpRequestError(
-          400,
-          "stream must match the request path",
-        );
+        throw new HttpRequestError(400, "stream must match the request path");
       }
       await options.cursorStore.put(cursor);
       sendNoContent(response);
@@ -348,9 +328,7 @@ async function handle(
   sendJson(response, 404, { error: "Not found" });
 }
 
-export function createStoreServer(
-  options: StoreServerOptions,
-): StoreServer {
+export function createStoreServer(options: StoreServerOptions): StoreServer {
   const host = options.host ?? DEFAULT_HOST;
   const port = options.port ?? DEFAULT_PORT;
 
@@ -379,20 +357,17 @@ export function createStoreServer(
       options.onRequest?.({ method, route, status, durationMs });
     };
 
-    void handle(request, response, options).then(
-      observe,
-      (error) => {
-        if (response.headersSent) {
-          response.destroy();
-          observe();
-          return;
-        }
-        sendJson(response, statusFor(error), {
-          error: messageFor(error),
-        });
+    void handle(request, response, options).then(observe, (error) => {
+      if (response.headersSent) {
+        response.destroy();
         observe();
-      },
-    );
+        return;
+      }
+      sendJson(response, statusFor(error), {
+        error: messageFor(error),
+      });
+      observe();
+    });
   });
 
   return {
@@ -407,9 +382,7 @@ export function createStoreServer(
           server.off("error", onError);
           const address = server.address();
           if (typeof address !== "object" || address === null) {
-            reject(
-              new Error("Store server did not expose a TCP address"),
-            );
+            reject(new Error("Store server did not expose a TCP address"));
             return;
           }
           resolve({

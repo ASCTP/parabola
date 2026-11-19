@@ -19,7 +19,11 @@ import type {
   TransferParams,
   TransferResult,
 } from "../types.js";
-import { decimalsForChain, fromRawAmount, toRawAmount } from "../utils/amount.js";
+import {
+  decimalsForChain,
+  fromRawAmount,
+  toRawAmount,
+} from "../utils/amount.js";
 import { parseUsdcAmount } from "../utils/encoding.js";
 import { decodeCctpMessage } from "../utils/message.js";
 import type {

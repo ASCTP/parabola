@@ -30,12 +30,14 @@ const ARC_ADDRESSES = {
 
 const STELLAR_CONTRACTS = {
   testnet: {
-    tokenMessengerMinter: "CDNG7HXAPBWICI2E3AUBP3YZWZELJLYSB6F5CC7WLDTLTHVM74SLRTHP",
+    tokenMessengerMinter:
+      "CDNG7HXAPBWICI2E3AUBP3YZWZELJLYSB6F5CC7WLDTLTHVM74SLRTHP",
     cctpForwarder: "CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ",
     usdc: "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
   },
   mainnet: {
-    tokenMessengerMinter: "CAE2G5Z77UP7GYPYGFOWFGW7C7J6I4YP2AFGSADRKQY62SYUFLPNFTXL",
+    tokenMessengerMinter:
+      "CAE2G5Z77UP7GYPYGFOWFGW7C7J6I4YP2AFGSADRKQY62SYUFLPNFTXL",
     cctpForwarder: "CBZL2IH7F6BIDAA3WBNXYKIXSATJGMSW7K5P5MJ6STX5RXN47TZJDF5T",
     usdc: "CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75",
   },
@@ -65,12 +67,17 @@ async function checkArcAddress(network, label, address) {
     const body = JSON.parse(text);
     code = body.result;
   } catch (error) {
-    console.log(`FAIL arc:${network}:${label} ${address} -> RPC error: ${error?.message ?? error}`);
+    console.log(
+      `FAIL arc:${network}:${label} ${address} -> RPC error: ${error?.message ?? error}`,
+    );
     failures++;
     return;
   }
-  const isContract = typeof code === "string" && code !== "0x" && code.length > 2;
-  console.log(`${isContract ? "OK  " : "FAIL"} arc:${network}:${label} ${address} -> ${isContract ? `${(code.length - 2) / 2} bytes of code` : "no code (EOA or nonexistent)"}`);
+  const isContract =
+    typeof code === "string" && code !== "0x" && code.length > 2;
+  console.log(
+    `${isContract ? "OK  " : "FAIL"} arc:${network}:${label} ${address} -> ${isContract ? `${(code.length - 2) / 2} bytes of code` : "no code (EOA or nonexistent)"}`,
+  );
   if (!isContract) failures++;
 }
 
@@ -81,9 +88,13 @@ async function checkStellarContract(network, label, contractId) {
       contractId,
       xdr.ScVal.scvLedgerKeyContractInstance(),
     );
-    console.log(`OK   stellar:${network}:${label} ${contractId} -> instance found`);
+    console.log(
+      `OK   stellar:${network}:${label} ${contractId} -> instance found`,
+    );
   } catch (error) {
-    console.log(`FAIL stellar:${network}:${label} ${contractId} -> ${error?.message ?? error}`);
+    console.log(
+      `FAIL stellar:${network}:${label} ${contractId} -> ${error?.message ?? error}`,
+    );
     failures++;
   }
 }
@@ -95,7 +106,9 @@ for (const network of ["testnet", "mainnet"]) {
   }
 
   console.log(`\nVerifying Stellar ${network} contracts...`);
-  for (const [label, contractId] of Object.entries(STELLAR_CONTRACTS[network])) {
+  for (const [label, contractId] of Object.entries(
+    STELLAR_CONTRACTS[network],
+  )) {
     await checkStellarContract(network, label, contractId);
   }
   console.log("");

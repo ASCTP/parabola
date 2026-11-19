@@ -9,10 +9,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { join } from "node:path";
-import type {
-  WebhookEndpoint,
-  WebhookEndpointStore,
-} from "./contracts.js";
+import type { WebhookEndpoint, WebhookEndpointStore } from "./contracts.js";
 
 function isNodeError(err: unknown): err is NodeJS.ErrnoException {
   return err instanceof Error && "code" in err;
@@ -81,10 +78,7 @@ export class FileWebhookEndpointStore implements WebhookEndpointStore {
     );
 
     return endpoints
-      .filter(
-        (endpoint): endpoint is WebhookEndpoint =>
-          endpoint !== undefined,
-      )
+      .filter((endpoint): endpoint is WebhookEndpoint => endpoint !== undefined)
       .sort((a, b) => a.id.localeCompare(b.id));
   }
 

@@ -9,10 +9,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { join } from "node:path";
-import type {
-  WebhookDelivery,
-  WebhookDeliveryStore,
-} from "./contracts.js";
+import type { WebhookDelivery, WebhookDeliveryStore } from "./contracts.js";
 
 function isNodeError(err: unknown): err is NodeJS.ErrnoException {
   return err instanceof Error && "code" in err;
@@ -26,10 +23,7 @@ function isAlreadyPresent(err: unknown): boolean {
   return isNodeError(err) && err.code === "EEXIST";
 }
 
-function sortDeliveries(
-  a: WebhookDelivery,
-  b: WebhookDelivery,
-): number {
+function sortDeliveries(a: WebhookDelivery, b: WebhookDelivery): number {
   return (
     a.nextAttemptAt - b.nextAttemptAt ||
     a.createdAt - b.createdAt ||
@@ -37,10 +31,7 @@ function sortDeliveries(
   );
 }
 
-function sortFailed(
-  a: WebhookDelivery,
-  b: WebhookDelivery,
-): number {
+function sortFailed(a: WebhookDelivery, b: WebhookDelivery): number {
   return a.updatedAt - b.updatedAt || a.id.localeCompare(b.id);
 }
 
@@ -99,36 +90,23 @@ export class FileWebhookDeliveryStore implements WebhookDeliveryStore {
     );
 
     return deliveries
-      .filter(
-        (delivery): delivery is WebhookDelivery =>
-          delivery !== undefined,
-      )
+      .filter((delivery): delivery is WebhookDelivery => delivery !== undefined)
       .sort(sortDeliveries);
   }
 
-  async listDue(
-    now: number,
-    limit?: number,
-  ): Promise<WebhookDelivery[]> {
-    if (
-      limit !== undefined &&
-      (!Number.isInteger(limit) || limit < 0)
-    ) {
+  async listDue(now: number, limit?: number): Promise<WebhookDelivery[]> {
+    if (limit !== undefined && (!Number.isInteger(limit) || limit < 0)) {
       throw new RangeError("limit must be a non-negative integer");
     }
     const due = (await this.list()).filter(
       (delivery) =>
-        delivery.status === "pending" &&
-        delivery.nextAttemptAt <= now,
+        delivery.status === "pending" && delivery.nextAttemptAt <= now,
     );
     return limit === undefined ? due : due.slice(0, limit);
   }
 
   async listFailed(limit?: number): Promise<WebhookDelivery[]> {
-    if (
-      limit !== undefined &&
-      (!Number.isInteger(limit) || limit < 0)
-    ) {
+    if (limit !== undefined && (!Number.isInteger(limit) || limit < 0)) {
       throw new RangeError("limit must be a non-negative integer");
     }
     const failed = (await this.list())

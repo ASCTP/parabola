@@ -1,9 +1,4 @@
-import {
-  Address,
-  nativeToScVal,
-  rpc,
-  xdr,
-} from "@stellar/stellar-sdk";
+import { Address, nativeToScVal, type rpc, xdr } from "@stellar/stellar-sdk";
 import type { Hex } from "viem";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TransferRecord } from "../../src/execution/contracts.js";
@@ -78,9 +73,7 @@ function eventReader(
   };
 }
 
-function burnRecord(
-  overrides: Partial<TransferRecord> = {},
-): TransferRecord {
+function burnRecord(overrides: Partial<TransferRecord> = {}): TransferRecord {
   return {
     idempotencyKey: "order-1",
     phase: "burning",
@@ -96,9 +89,7 @@ function burnRecord(
   };
 }
 
-function mintRecord(
-  overrides: Partial<TransferRecord> = {},
-): TransferRecord {
+function mintRecord(overrides: Partial<TransferRecord> = {}): TransferRecord {
   return {
     idempotencyKey: "order-1",
     phase: "burned",
@@ -291,10 +282,7 @@ describe("Stellar cursor sync", () => {
         network: "mainnet",
         startLedger: 90,
         cursorStore: cursors,
-        ledgerReader: ledgerReader(
-          105,
-          new Map([[95, ledgerHash(95)]]),
-        ),
+        ledgerReader: ledgerReader(105, new Map([[95, ledgerHash(95)]])),
         eventReader: eventReader([]),
       }),
     ).rejects.toBeInstanceOf(IndexerCursorError);

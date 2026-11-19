@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { decimalsForChain, toRawAmount, fromRawAmount } from "../src/utils/amount.js";
+import {
+  decimalsForChain,
+  toRawAmount,
+  fromRawAmount,
+} from "../src/utils/amount.js";
 import { ARC_TESTNET, STELLAR_TESTNET } from "../src/constants.js";
 
 describe("decimalsForChain", () => {

@@ -1,4 +1,4 @@
-import { concat, numberToHex, pad, type Hex } from "viem";
+import { concat, numberToHex, type Hex } from "viem";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TransferRecord } from "../../src/execution/contracts.js";
 
@@ -26,8 +26,7 @@ const { evmAddressToBytes32, stellarAddressToBytes32 } = await import(
 );
 
 const RECIPIENT = "0x2222222222222222222222222222222222222222";
-const DEPOSITOR =
-  "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2";
+const DEPOSITOR = "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2";
 const BURN_HASH = "stellar-burn-1";
 const MINT_HASH = `0x${"a".repeat(64)}` as const;
 const OTHER_MINT_HASH = `0x${"b".repeat(64)}` as const;
@@ -177,10 +176,7 @@ describe("Arc mint indexer", () => {
   });
 
   it("reports ambiguous matches without reconciling", async () => {
-    getLogs.mockResolvedValue([
-      log(MINT_HASH),
-      log(OTHER_MINT_HASH),
-    ]);
+    getLogs.mockResolvedValue([log(MINT_HASH), log(OTHER_MINT_HASH)]);
     const store = new MemoryTransferStore();
     await store.create(record());
 
@@ -267,9 +263,7 @@ describe("Arc mint indexer", () => {
             stellarConfig("testnet").tokenMessengerMinter,
           ),
           messageBody: burnBody({
-            burnToken: stellarAddressToBytes32(
-              stellarConfig("testnet").usdc,
-            ),
+            burnToken: stellarAddressToBytes32(stellarConfig("testnet").usdc),
           }),
         }),
       ),

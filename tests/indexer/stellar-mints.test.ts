@@ -1,9 +1,4 @@
-import {
-  Address,
-  nativeToScVal,
-  rpc,
-  xdr,
-} from "@stellar/stellar-sdk";
+import { Address, nativeToScVal, type rpc, xdr } from "@stellar/stellar-sdk";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TransferRecord } from "../../src/execution/contracts.js";
 import { MemoryTransferStore } from "../../src/execution/memory-store.js";
@@ -15,8 +10,7 @@ import {
   readStellarMints,
 } from "../../src/indexer/stellar-mints.js";
 
-const RECIPIENT =
-  "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2";
+const RECIPIENT = "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2";
 const DEPOSITOR = "0x1111111111111111111111111111111111111111";
 const BURN_HASH = `0x${"a".repeat(64)}` as const;
 const MINT_HASH = "stellar-mint-1";
@@ -320,7 +314,7 @@ describe("Stellar mint indexer", () => {
 
     expect(mints).toHaveLength(201);
     expect(
-      (source.getEvents as ReturnType<typeof vi.fn>),
+      source.getEvents as ReturnType<typeof vi.fn>,
     ).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ cursor: "cursor-1", limit: 200 }),

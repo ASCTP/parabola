@@ -2,8 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { TransferRecord } from "../../src/execution/contracts.js";
 import { MemoryTransferStore } from "../../src/execution/memory-store.js";
 
-const RECIPIENT =
-  "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2";
+const RECIPIENT = "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2";
 
 function record(overrides: Partial<TransferRecord> = {}): TransferRecord {
   return {
@@ -36,12 +35,18 @@ describe("memory transfer store leases", () => {
     const store = new MemoryTransferStore();
     await store.create(record());
 
-    await expect(store.claim("order-1", "owner-a", 60_000)).resolves.toMatchObject(
-      { status: "claimed", record: { idempotencyKey: "order-1" } },
-    );
-    await expect(store.claim("order-1", "owner-b", 60_000)).resolves.toMatchObject(
-      { status: "busy", record: { idempotencyKey: "order-1" } },
-    );
+    await expect(
+      store.claim("order-1", "owner-a", 60_000),
+    ).resolves.toMatchObject({
+      status: "claimed",
+      record: { idempotencyKey: "order-1" },
+    });
+    await expect(
+      store.claim("order-1", "owner-b", 60_000),
+    ).resolves.toMatchObject({
+      status: "busy",
+      record: { idempotencyKey: "order-1" },
+    });
   });
 
   it("lets the same owner renew its lease", async () => {
@@ -49,7 +54,9 @@ describe("memory transfer store leases", () => {
     await store.claim("order-1", "owner-a", 60_000);
 
     await expect(store.renew("order-1", "owner-a", 60_000)).resolves.toBe(true);
-    await expect(store.renew("order-1", "owner-b", 60_000)).resolves.toBe(false);
+    await expect(store.renew("order-1", "owner-b", 60_000)).resolves.toBe(
+      false,
+    );
   });
 
   it("releases a lease for another owner", async () => {
@@ -58,23 +65,25 @@ describe("memory transfer store leases", () => {
 
     await store.release("order-1", "owner-b");
 
-    await expect(store.claim("order-1", "owner-b", 60_000)).resolves.toMatchObject(
-      { status: "busy" },
-    );
+    await expect(
+      store.claim("order-1", "owner-b", 60_000),
+    ).resolves.toMatchObject({ status: "busy" });
     await store.release("order-1", "owner-a");
-    await expect(store.claim("order-1", "owner-b", 60_000)).resolves.toMatchObject(
-      { status: "claimed" },
-    );
+    await expect(
+      store.claim("order-1", "owner-b", 60_000),
+    ).resolves.toMatchObject({ status: "claimed" });
   });
 
   it("reclaims an expired lease", async () => {
     const store = new MemoryTransferStore();
     await store.claim("order-1", "owner-a", 0);
 
-    await expect(store.claim("order-1", "owner-b", 60_000)).resolves.toMatchObject(
-      { status: "claimed" },
+    await expect(
+      store.claim("order-1", "owner-b", 60_000),
+    ).resolves.toMatchObject({ status: "claimed" });
+    await expect(store.renew("order-1", "owner-a", 60_000)).resolves.toBe(
+      false,
     );
-    await expect(store.renew("order-1", "owner-a", 60_000)).resolves.toBe(false);
   });
 
   it("removes the lease when a record is deleted", async () => {

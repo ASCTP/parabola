@@ -110,9 +110,9 @@ describe("FileIndexerCursorStore", () => {
     if (!file) {
       throw new Error("expected cursor file");
     }
-    const raw = JSON.parse(
-      await readFile(join(directory, file), "utf8"),
-    ) as { blockNumber: string };
+    const raw = JSON.parse(await readFile(join(directory, file), "utf8")) as {
+      blockNumber: string;
+    };
 
     expect(raw.blockNumber).toBe("100");
   });

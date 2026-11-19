@@ -1,4 +1,4 @@
-import { concat, numberToHex, pad, type Hex } from "viem";
+import { concat, numberToHex, type Hex } from "viem";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TransferRecord } from "../../src/execution/contracts.js";
 import type { ArcBlockReader } from "../../src/indexer/arc-sync.js";
@@ -32,8 +32,7 @@ const {
   stellarAddressToBytes32,
 } = await import("../../src/utils/encoding.js");
 
-const RECIPIENT =
-  "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2";
+const RECIPIENT = "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2";
 const EVM_RECIPIENT = "0x2222222222222222222222222222222222222222";
 const DEPOSITOR = "0x1111111111111111111111111111111111111111";
 const BURN_HASH = `0x${"a".repeat(64)}` as const;
@@ -64,9 +63,7 @@ function reader(
   };
 }
 
-function burnRecord(
-  overrides: Partial<TransferRecord> = {},
-): TransferRecord {
+function burnRecord(overrides: Partial<TransferRecord> = {}): TransferRecord {
   return {
     idempotencyKey: "order-1",
     phase: "burning",
@@ -82,9 +79,7 @@ function burnRecord(
   };
 }
 
-function mintRecord(
-  overrides: Partial<TransferRecord> = {},
-): TransferRecord {
+function mintRecord(overrides: Partial<TransferRecord> = {}): TransferRecord {
   return {
     idempotencyKey: "order-1",
     phase: "burned",

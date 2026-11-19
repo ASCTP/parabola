@@ -41,9 +41,7 @@ describe("memory webhook endpoint store", () => {
 
     (record.events as string[]).push("transfer.failed");
 
-    expect((await store.get("orders"))?.events).toEqual([
-      "transfer.minted",
-    ]);
+    expect((await store.get("orders"))?.events).toEqual(["transfer.minted"]);
   });
 
   it("lists endpoints by id", async () => {
@@ -51,9 +49,6 @@ describe("memory webhook endpoint store", () => {
     await store.create(endpoint("b"));
     await store.create(endpoint("a"));
 
-    expect((await store.list()).map((item) => item.id)).toEqual([
-      "a",
-      "b",
-    ]);
+    expect((await store.list()).map((item) => item.id)).toEqual(["a", "b"]);
   });
 });

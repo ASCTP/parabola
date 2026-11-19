@@ -106,12 +106,8 @@ describe("webhook signatures", () => {
 
   it("rejects invalid signing input", () => {
     expect(() => signWebhookPayload("", NOW, BODY)).toThrow(RangeError);
-    expect(() => signWebhookPayload(SECRET, -1, BODY)).toThrow(
-      RangeError,
-    );
-    expect(() => signWebhookPayload(SECRET, 1.5, BODY)).toThrow(
-      RangeError,
-    );
+    expect(() => signWebhookPayload(SECRET, -1, BODY)).toThrow(RangeError);
+    expect(() => signWebhookPayload(SECRET, 1.5, BODY)).toThrow(RangeError);
   });
 });
 
@@ -156,11 +152,7 @@ describe("webhook replay guard", () => {
   });
 
   it("rejects invalid options", () => {
-    expect(() => new WebhookReplayGuard({ ttlMs: 0 })).toThrow(
-      RangeError,
-    );
-    expect(
-      () => new WebhookReplayGuard({ maxEntries: 0 }),
-    ).toThrow(RangeError);
+    expect(() => new WebhookReplayGuard({ ttlMs: 0 })).toThrow(RangeError);
+    expect(() => new WebhookReplayGuard({ maxEntries: 0 })).toThrow(RangeError);
   });
 });

@@ -1,10 +1,6 @@
 import { createPublicClient, http, type Hex } from "viem";
 import { arcMainnetChain, arcTestnetChain } from "../chains/arc.js";
-import {
-  STELLAR_DOMAIN,
-  arcConfig,
-  stellarConfig,
-} from "../constants.js";
+import { STELLAR_DOMAIN, arcConfig, stellarConfig } from "../constants.js";
 import type { TransferRecord, TransferStore } from "../execution/contracts.js";
 import { TransferConflictError } from "../execution/errors.js";
 import {
@@ -17,10 +13,7 @@ import {
   stellarAddressToBytes32,
 } from "../utils/encoding.js";
 import { decodeCctpBurnBody } from "../utils/message.js";
-import type {
-  ArcMintIndexOptions,
-  IndexerSummary,
-} from "./contracts.js";
+import type { ArcMintIndexOptions, IndexerSummary } from "./contracts.js";
 import { InvalidIndexerRangeError } from "./errors.js";
 
 const messageReceivedEvent = {
@@ -82,7 +75,7 @@ function matchesMint(
     return false;
   }
 
-  let body;
+  let body: ReturnType<typeof decodeCctpBurnBody>;
   try {
     body = decodeCctpBurnBody(args.messageBody);
   } catch {

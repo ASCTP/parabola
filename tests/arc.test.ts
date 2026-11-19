@@ -18,7 +18,7 @@ const {
 } = await import("../src/chains/arc.js");
 const { ARC_TESTNET, ARC_MAINNET } = await import("../src/constants.js");
 
-const FAKE_HASH = "0x" + "a".repeat(64);
+const FAKE_HASH = `0x${"a".repeat(64)}`;
 const ZERO_BYTES32 = `0x${"0".repeat(64)}`;
 
 function makeSigner() {
@@ -132,7 +132,12 @@ describe("receiveMessageOnArc", () => {
     const message = `0x${"44".repeat(20)}` as const;
     const attestation = `0x${"55".repeat(65)}` as const;
 
-    const hash = await receiveMessageOnArc({ message, attestation, signer, network: "testnet" });
+    const hash = await receiveMessageOnArc({
+      message,
+      attestation,
+      signer,
+      network: "testnet",
+    });
 
     expect(hash).toBe(FAKE_HASH);
     const call = writeContract.mock.calls[0]?.[0];

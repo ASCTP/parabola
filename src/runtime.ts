@@ -66,12 +66,8 @@ export interface SettlementRuntime {
   resolveBurn(params: ResolveBurnParams): Promise<ResolvedBurn>;
   indexArcBurns(options: ArcBurnIndexOptions): Promise<IndexerSummary>;
   indexArcMints(options: ArcMintIndexOptions): Promise<IndexerSummary>;
-  indexStellarBurns(
-    options: StellarBurnIndexOptions,
-  ): Promise<IndexerSummary>;
-  indexStellarMints(
-    options: StellarMintIndexOptions,
-  ): Promise<IndexerSummary>;
+  indexStellarBurns(options: StellarBurnIndexOptions): Promise<IndexerSummary>;
+  indexStellarMints(options: StellarMintIndexOptions): Promise<IndexerSummary>;
   syncArcBurns(options: ArcSyncOptions): Promise<ArcSyncResult>;
   syncArcMints(options: ArcSyncOptions): Promise<ArcSyncResult>;
   syncStellarBurns(options: StellarSyncOptions): Promise<StellarSyncResult>;
@@ -83,8 +79,7 @@ export function createSettlementRuntime(
   options: SettlementRuntimeOptions = {},
 ): SettlementRuntime {
   const kernel =
-    options.kernel ??
-    createSettlementKernel(defaultSettlementDependencies);
+    options.kernel ?? createSettlementKernel(defaultSettlementDependencies);
 
   return {
     execute(params, executeOptions) {

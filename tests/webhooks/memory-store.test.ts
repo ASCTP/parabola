@@ -64,13 +64,12 @@ describe("memory webhook delivery store", () => {
     await store.create(record);
 
     const first = await store.get("delivery_1");
-    (first?.event.data as { nested: { value: number } }).nested.value = 2;
+    const firstData = first?.event.data as { nested: { value: number } };
+    firstData.nested.value = 2;
 
     const second = await store.get("delivery_1");
-    expect(
-      (second?.event.data as { nested: { value: number } }).nested
-        .value,
-    ).toBe(1);
+    const secondData = second?.event.data as { nested: { value: number } };
+    expect(secondData.nested.value).toBe(1);
   });
 
   it("lists deliveries in due order", async () => {
@@ -97,12 +96,10 @@ describe("memory webhook delivery store", () => {
       }),
     );
 
-    expect(
-      (await store.listDue(2_000)).map((item) => item.id),
-    ).toEqual(["due"]);
-    expect(
-      (await store.listDue(2_000, 0)).map((item) => item.id),
-    ).toEqual([]);
+    expect((await store.listDue(2_000)).map((item) => item.id)).toEqual([
+      "due",
+    ]);
+    expect((await store.listDue(2_000, 0)).map((item) => item.id)).toEqual([]);
   });
 
   it("lists failed deliveries in update order", async () => {
@@ -121,23 +118,20 @@ describe("memory webhook delivery store", () => {
     );
     await store.create(delivery("pending"));
 
-    expect(
-      (await store.listFailed()).map((item) => item.id),
-    ).toEqual(["earlier", "later"]);
-    expect(
-      (await store.listFailed(1)).map((item) => item.id),
-    ).toEqual(["earlier"]);
+    expect((await store.listFailed()).map((item) => item.id)).toEqual([
+      "earlier",
+      "later",
+    ]);
+    expect((await store.listFailed(1)).map((item) => item.id)).toEqual([
+      "earlier",
+    ]);
   });
 
   it("rejects an invalid due limit", async () => {
     const store = new MemoryWebhookDeliveryStore();
 
-    await expect(store.listDue(1_000, -1)).rejects.toThrow(
-      RangeError,
-    );
-    await expect(store.listDue(1_000, 1.5)).rejects.toThrow(
-      RangeError,
-    );
+    await expect(store.listDue(1_000, -1)).rejects.toThrow(RangeError);
+    await expect(store.listDue(1_000, 1.5)).rejects.toThrow(RangeError);
     await expect(store.listFailed(-1)).rejects.toThrow(RangeError);
   });
 });

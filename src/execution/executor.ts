@@ -154,10 +154,7 @@ function progressWriter(
   };
 }
 
-function rethrowProgressError(
-  err: unknown,
-  record: TransferRecord,
-): void {
+function rethrowProgressError(err: unknown, record: TransferRecord): void {
   if (err instanceof TransferProgressError) {
     if (
       err.cause instanceof TransferPersistenceError ||
@@ -213,7 +210,7 @@ async function resumeTransfer(
     options: params.options,
   } as unknown as CompleteMintParams;
 
-  let completed;
+  let completed: Awaited<ReturnType<typeof kernel.completeMint>>;
   try {
     completed = await kernel.completeMint(resumeParams, {
       onProgress: progressWriter(store, record, owner, leaseMs),
@@ -351,7 +348,9 @@ export async function executeTransfer(
     if (!(await store.create(record))) {
       const raced = await store.get(idempotencyKey);
       if (!raced) {
-        throw new Error(`Transfer ${idempotencyKey} disappeared from the store`);
+        throw new Error(
+          `Transfer ${idempotencyKey} disappeared from the store`,
+        );
       }
       return await resolveClaimedRecord(
         kernel,

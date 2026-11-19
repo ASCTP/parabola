@@ -18,15 +18,13 @@ const { indexArcBurns } = await import("../../src/indexer/arc-burns.js");
 const { InvalidIndexerRangeError } = await import(
   "../../src/indexer/errors.js"
 );
-const { ARC_MAINNET, ARC_TESTNET, STELLAR_DOMAIN, stellarConfig } = await import(
-  "../../src/constants.js"
-);
+const { ARC_MAINNET, ARC_TESTNET, STELLAR_DOMAIN, stellarConfig } =
+  await import("../../src/constants.js");
 const { encodeStellarForwardHook, stellarAddressToBytes32 } = await import(
   "../../src/utils/encoding.js"
 );
 
-const RECIPIENT =
-  "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2";
+const RECIPIENT = "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2";
 const DEPOSITOR = "0x1111111111111111111111111111111111111111";
 const BURN_HASH = `0x${"a".repeat(64)}` as const;
 const OTHER_BURN_HASH = `0x${"b".repeat(64)}` as const;
@@ -149,10 +147,7 @@ describe("Arc burn indexer", () => {
   });
 
   it("reports ambiguous matches without reconciling", async () => {
-    getLogs.mockResolvedValue([
-      log(BURN_HASH),
-      log(OTHER_BURN_HASH),
-    ]);
+    getLogs.mockResolvedValue([log(BURN_HASH), log(OTHER_BURN_HASH)]);
     const store = new MemoryTransferStore();
     await store.create(record());
 

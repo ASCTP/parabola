@@ -26,17 +26,11 @@ function assertReceiptHash(
   receipt: unknown,
 ): string {
   if (typeof receipt !== "object" || receipt === null) {
-    throw new ConformanceError(
-      check,
-      `${label} returned a non-object receipt`,
-    );
+    throw new ConformanceError(check, `${label} returned a non-object receipt`);
   }
   const transactionHash = (receipt as { transactionHash?: unknown })
     .transactionHash;
-  if (
-    typeof transactionHash !== "string" ||
-    transactionHash.trim() === ""
-  ) {
+  if (typeof transactionHash !== "string" || transactionHash.trim() === "") {
     throw new ConformanceError(
       check,
       `${label} returned an empty transaction hash`,
@@ -47,10 +41,7 @@ function assertReceiptHash(
 
 export function assertChainAdapterConforms(adapter: ChainAdapter): void {
   if (typeof adapter !== "object" || adapter === null) {
-    throw new ConformanceError(
-      "chain",
-      "adapter must be an object",
-    );
+    throw new ConformanceError("chain", "adapter must be an object");
   }
   if (adapter.chain !== "arc" && adapter.chain !== "stellar") {
     throw new ConformanceError(
@@ -164,8 +155,7 @@ export function assertSettlementDependenciesConform(
     try {
       assertChainAdapterConforms(adapter);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : String(error);
+      const message = error instanceof Error ? error.message : String(error);
       throw new ConformanceError(
         "dependencies.chains",
         `${chain} adapter failed: ${message}`,

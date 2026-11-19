@@ -35,9 +35,7 @@ describe("webhook endpoint manager", () => {
     ]);
     expect(await manager.get("orders")).toEqual(endpoint("orders"));
 
-    await manager.update(
-      endpoint("orders", { enabled: false }),
-    );
+    await manager.update(endpoint("orders", { enabled: false }));
     expect((await manager.get("orders"))?.enabled).toBe(false);
 
     await manager.remove("orders");
@@ -50,9 +48,9 @@ describe("webhook endpoint manager", () => {
     );
     await manager.create(endpoint("orders"));
 
-    await expect(
-      manager.create(endpoint("orders")),
-    ).rejects.toThrow(WebhookEndpointConflictError);
+    await expect(manager.create(endpoint("orders"))).rejects.toThrow(
+      WebhookEndpointConflictError,
+    );
   });
 
   it("rejects updates and removals for missing endpoints", async () => {
@@ -60,12 +58,12 @@ describe("webhook endpoint manager", () => {
       new MemoryWebhookEndpointStore(),
     );
 
-    await expect(
-      manager.update(endpoint("missing")),
-    ).rejects.toThrow(WebhookEndpointNotFoundError);
-    await expect(
-      manager.remove("missing"),
-    ).rejects.toThrow(WebhookEndpointNotFoundError);
+    await expect(manager.update(endpoint("missing"))).rejects.toThrow(
+      WebhookEndpointNotFoundError,
+    );
+    await expect(manager.remove("missing")).rejects.toThrow(
+      WebhookEndpointNotFoundError,
+    );
   });
 
   it("rejects invalid endpoints before storing them", async () => {
@@ -86,9 +84,7 @@ describe("webhook endpoint manager", () => {
     await store.put(endpoint("orders", { secret: "" }));
     const manager = new WebhookEndpointManager(store);
 
-    await expect(manager.list()).rejects.toThrow(
-      /secret must not be empty/,
-    );
+    await expect(manager.list()).rejects.toThrow(/secret must not be empty/);
     await expect(manager.get("orders")).rejects.toThrow(
       /secret must not be empty/,
     );

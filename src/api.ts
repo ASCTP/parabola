@@ -31,10 +31,7 @@ import {
   InvalidLedgerRangeError,
 } from "./indexer/errors.js";
 import type { SettlementMetrics } from "./observability.js";
-import {
-  createSettlementRuntime,
-  type SettlementRuntime,
-} from "./runtime.js";
+import { createSettlementRuntime, type SettlementRuntime } from "./runtime.js";
 import type { Network } from "./types.js";
 
 const DEFAULT_HOST = "127.0.0.1";
@@ -120,10 +117,7 @@ function messageFor(error: unknown): string {
 function requiredNetwork(body: Record<string, unknown>): Network {
   const value = requiredString(body, "network");
   if (value !== "mainnet" && value !== "testnet") {
-    throw new HttpRequestError(
-      400,
-      "network must be mainnet or testnet",
-    );
+    throw new HttpRequestError(400, "network must be mainnet or testnet");
   }
   return value;
 }
@@ -223,10 +217,7 @@ async function handle(
     }
     const idempotencyKey = decodeURIComponent(reconcileMatch[1] as string);
     const body = requireObject(
-      await readJson(
-        request,
-        options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES,
-      ),
+      await readJson(request, options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES),
     );
     const outcome = await runtime.reconcile({
       idempotencyKey,
@@ -249,10 +240,7 @@ async function handle(
     const chain = indexMatch[1] as "arc" | "stellar";
     const kind = indexMatch[2] as "burns" | "mints";
     const body = requireObject(
-      await readJson(
-        request,
-        options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES,
-      ),
+      await readJson(request, options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES),
     );
 
     if (chain === "arc") {
@@ -293,10 +281,7 @@ async function handle(
     const chain = syncMatch[1] as "arc" | "stellar";
     const kind = syncMatch[2] as "burns" | "mints";
     const body = requireObject(
-      await readJson(
-        request,
-        options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES,
-      ),
+      await readJson(request, options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES),
     );
 
     if (chain === "arc") {
@@ -373,18 +358,15 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
       options.onRequest?.({ method, route, status, durationMs });
     };
 
-    void handle(request, response, options, runtime).then(
-      observe,
-      (error) => {
-        if (response.headersSent) {
-          response.destroy();
-          observe();
-          return;
-        }
-        sendJson(response, statusFor(error), { error: messageFor(error) });
+    void handle(request, response, options, runtime).then(observe, (error) => {
+      if (response.headersSent) {
+        response.destroy();
         observe();
-      },
-    );
+        return;
+      }
+      sendJson(response, statusFor(error), { error: messageFor(error) });
+      observe();
+    });
   });
 
   return {

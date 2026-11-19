@@ -1,7 +1,4 @@
-import type {
-  SettlementLogger,
-  SettlementMetrics,
-} from "../observability.js";
+import type { SettlementLogger, SettlementMetrics } from "../observability.js";
 import type {
   WebhookDelivery,
   WebhookDeliveryStatus,
@@ -78,25 +75,17 @@ function endpointMap(
   endpoints: readonly WebhookEndpoint[],
 ): Map<string, WebhookEndpoint> {
   assertWebhookEndpoints(endpoints);
-  return new Map(
-    endpoints.map((endpoint) => [endpoint.id, endpoint]),
-  );
+  return new Map(endpoints.map((endpoint) => [endpoint.id, endpoint]));
 }
 
-function matchesEvent(
-  endpoint: WebhookEndpoint,
-  event: WebhookEvent,
-): boolean {
+function matchesEvent(endpoint: WebhookEndpoint, event: WebhookEvent): boolean {
   if (endpoint.enabled === false) {
     return false;
   }
   if (!endpoint.events) {
     return true;
   }
-  return (
-    endpoint.events.includes("*") ||
-    endpoint.events.includes(event.type)
-  );
+  return endpoint.events.includes("*") || endpoint.events.includes(event.type);
 }
 
 function isRetryableStatus(status: number): boolean {
@@ -122,14 +111,9 @@ function retryAfterMs(
   return Math.max(0, date - now);
 }
 
-export function webhookDeliveryId(
-  eventId: string,
-  endpointId: string,
-): string {
+export function webhookDeliveryId(eventId: string, endpointId: string): string {
   if (eventId === "" || endpointId === "") {
-    throw new RangeError(
-      "Webhook event id and endpoint id must not be empty",
-    );
+    throw new RangeError("Webhook event id and endpoint id must not be empty");
   }
   return `${eventId.length}:${eventId}:${endpointId}`;
 }
@@ -167,10 +151,8 @@ export class WebhookDispatcher {
     this.store = options.store;
     this.http = options.http ?? (fetch as WebhookFetch);
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    this.maxAttempts =
-      options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
-    this.baseDelayMs =
-      options.baseDelayMs ?? DEFAULT_BASE_DELAY_MS;
+    this.maxAttempts = options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
+    this.baseDelayMs = options.baseDelayMs ?? DEFAULT_BASE_DELAY_MS;
     this.maxDelayMs = options.maxDelayMs ?? DEFAULT_MAX_DELAY_MS;
     this.batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
     this.metrics = options.metrics;
@@ -199,10 +181,7 @@ export class WebhookDispatcher {
       throw new WebhookDeliveryNotFoundError(deliveryId);
     }
     if (delivery.status !== "failed") {
-      throw new WebhookDeliveryStateError(
-        deliveryId,
-        delivery.status,
-      );
+      throw new WebhookDeliveryStateError(deliveryId, delivery.status);
     }
 
     const now = this.now();
@@ -241,9 +220,7 @@ export class WebhookDispatcher {
     return endpoints;
   }
 
-  private async endpointFor(
-    id: string,
-  ): Promise<WebhookEndpoint | undefined> {
+  private async endpointFor(id: string): Promise<WebhookEndpoint | undefined> {
     if (this.endpoints) {
       return this.endpoints.get(id);
     }
@@ -256,14 +233,9 @@ export class WebhookDispatcher {
 
   async enqueue(event: WebhookEvent): Promise<WebhookDelivery[]> {
     if (typeof event.id !== "string" || event.id.trim() === "") {
-      throw new InvalidWebhookEventError(
-        "Webhook event id must not be empty",
-      );
+      throw new InvalidWebhookEventError("Webhook event id must not be empty");
     }
-    if (
-      typeof event.type !== "string" ||
-      event.type.trim() === ""
-    ) {
+    if (typeof event.type !== "string" || event.type.trim() === "") {
       throw new InvalidWebhookEventError(
         "Webhook event type must not be empty",
       );
@@ -333,9 +305,7 @@ export class WebhookDispatcher {
     return run;
   }
 
-  private async runDispatch(
-    now: number,
-  ): Promise<WebhookDispatchResult> {
+  private async runDispatch(now: number): Promise<WebhookDispatchResult> {
     const startedAt = this.now();
     const due = await this.store.listDue(now, this.batchSize);
     const deliveries: WebhookDeliveryResult[] = [];
@@ -374,17 +344,11 @@ export class WebhookDispatcher {
     delivery.status = "delivering";
     delivery.attempts = attempt;
 
-    const body = JSON.stringify(
-      delivery.event,
-      (_key, value) =>
-        typeof value === "bigint" ? value.toString() : value,
+    const body = JSON.stringify(delivery.event, (_key, value) =>
+      typeof value === "bigint" ? value.toString() : value,
     );
     const timestamp = Math.floor(startedAt / 1_000);
-    const signature = signWebhookPayload(
-      endpoint.secret,
-      timestamp,
-      body,
-    );
+    const signature = signWebhookPayload(endpoint.secret, timestamp, body);
     const headers: Record<string, string> = {
       "content-type": "application/json",
       "user-agent": this.userAgent,
@@ -420,64 +384,44 @@ export class WebhookDispatcher {
       delivery.responseStatus = response.status;
       delivery.lastError = `HTTP ${response.status}`;
       const retry =
-        isRetryableStatus(response.status) &&
-        attempt < delivery.maxAttempts;
+        isRetryableStatus(response.status) && attempt < delivery.maxAttempts;
       if (retry) {
         delivery.status = "pending";
         delivery.nextAttemptAt =
           finishedAt +
-          this.retryDelay(
-            attempt,
-            retryAfterMs(response, finishedAt),
-          );
+          this.retryDelay(attempt, retryAfterMs(response, finishedAt));
       } else {
         delivery.status = "failed";
       }
       delivery.updatedAt = finishedAt;
       await this.store.put(delivery);
-      this.recordOutcome(
-        delivery,
-        retry ? "retry" : "failed",
-        duration,
-      );
+      this.recordOutcome(delivery, retry ? "retry" : "failed", duration);
       return this.resultFor(delivery);
     } catch (err) {
       const finishedAt = this.now();
       const duration = finishedAt - startedAt;
-      const message =
-        err instanceof Error ? err.message : String(err);
+      const message = err instanceof Error ? err.message : String(err);
       delivery.lastError = message;
       const retry = attempt < delivery.maxAttempts;
       if (retry) {
         delivery.status = "pending";
-        delivery.nextAttemptAt =
-          finishedAt + this.retryDelay(attempt);
+        delivery.nextAttemptAt = finishedAt + this.retryDelay(attempt);
       } else {
         delivery.status = "failed";
       }
       delivery.updatedAt = finishedAt;
       await this.store.put(delivery);
-      this.recordOutcome(
-        delivery,
-        retry ? "retry" : "failed",
-        duration,
-      );
+      this.recordOutcome(delivery, retry ? "retry" : "failed", duration);
       return this.resultFor(delivery);
     }
   }
 
-  private retryDelay(
-    attempt: number,
-    retryAfter?: number,
-  ): number {
+  private retryDelay(attempt: number, retryAfter?: number): number {
     const backoff = Math.min(
       this.maxDelayMs,
       this.baseDelayMs * 2 ** Math.max(0, attempt - 1),
     );
-    return Math.min(
-      this.maxDelayMs,
-      Math.max(backoff, retryAfter ?? 0),
-    );
+    return Math.min(this.maxDelayMs, Math.max(backoff, retryAfter ?? 0));
   }
 
   private recordOutcome(
@@ -491,18 +435,12 @@ export class WebhookDispatcher {
     this.metrics?.counter("parabola_webhook_delivery_total", 1, {
       outcome,
     });
-    this.metrics?.histogram(
-      "parabola_webhook_delivery_duration_ms",
-      duration,
-      { outcome },
-    );
+    this.metrics?.histogram("parabola_webhook_delivery_duration_ms", duration, {
+      outcome,
+    });
     this.logger?.log({
       level:
-        outcome === "failed"
-          ? "error"
-          : outcome === "retry"
-            ? "warn"
-            : "info",
+        outcome === "failed" ? "error" : outcome === "retry" ? "warn" : "info",
       event: `webhook.delivery.${outcome}`,
       timestamp: delivery.updatedAt,
       fields: {
@@ -516,9 +454,7 @@ export class WebhookDispatcher {
     });
   }
 
-  private resultFor(
-    delivery: WebhookDelivery,
-  ): WebhookDeliveryResult {
+  private resultFor(delivery: WebhookDelivery): WebhookDeliveryResult {
     return {
       deliveryId: delivery.id,
       eventId: delivery.eventId,

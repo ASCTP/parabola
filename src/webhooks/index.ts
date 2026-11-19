@@ -23,21 +23,11 @@ export {
   assertWebhookEndpoint,
   assertWebhookEndpoints,
 } from "./endpoint-validation.js";
-export {
-  WebhookEndpointManager,
-} from "./endpoint-manager.js";
-export {
-  MemoryWebhookEndpointStore,
-} from "./endpoint-memory-store.js";
-export {
-  FileWebhookEndpointStore,
-} from "./endpoint-file-store.js";
-export {
-  MemoryWebhookDeliveryStore,
-} from "./memory-store.js";
-export {
-  FileWebhookDeliveryStore,
-} from "./file-store.js";
+export { WebhookEndpointManager } from "./endpoint-manager.js";
+export { MemoryWebhookEndpointStore } from "./endpoint-memory-store.js";
+export { FileWebhookEndpointStore } from "./endpoint-file-store.js";
+export { MemoryWebhookDeliveryStore } from "./memory-store.js";
+export { FileWebhookDeliveryStore } from "./file-store.js";
 export {
   signWebhookPayload,
   verifyWebhookSignature,
@@ -47,12 +37,8 @@ export type {
   WebhookReplayGuardOptions,
   WebhookSignatureOptions,
 } from "./signature.js";
-export {
-  transferWebhookEvent,
-} from "./transfer-event.js";
-export type {
-  TransferWebhookEventOptions,
-} from "./transfer-event.js";
+export { transferWebhookEvent } from "./transfer-event.js";
+export type { TransferWebhookEventOptions } from "./transfer-event.js";
 export {
   WebhookDispatcher,
   webhookDeliveryId,

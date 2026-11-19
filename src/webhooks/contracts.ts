@@ -81,7 +81,6 @@ export type TransferWebhookEventType =
   | "transfer.recoverable"
   | "transfer.failed";
 
-export interface TransferWebhookEvent
-  extends WebhookEvent<TransferRecord> {
+export interface TransferWebhookEvent extends WebhookEvent<TransferRecord> {
   type: TransferWebhookEventType;
 }

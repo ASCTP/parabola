@@ -10,9 +10,7 @@ export const STELLAR_SIGNER: StellarSigner = {
   signTransaction: async () => "",
 };
 
-export function fakeChainAdapter(
-  chain: "arc" | "stellar",
-): ChainAdapter {
+export function fakeChainAdapter(chain: "arc" | "stellar"): ChainAdapter {
   return {
     chain,
     async burn(request) {

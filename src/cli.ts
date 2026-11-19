@@ -117,10 +117,7 @@ function parseArgs(argv: string[]): ParsedArgs {
   return { values, positionals };
 }
 
-function assertKnownFlags(
-  parsed: ParsedArgs,
-  allowed: string[],
-): void {
+function assertKnownFlags(parsed: ParsedArgs, allowed: string[]): void {
   const known = new Set(allowed);
   for (const name of parsed.values.keys()) {
     if (!known.has(name)) {
@@ -194,10 +191,7 @@ function integerFlag(
   return parsedValue;
 }
 
-function bigintFlag(
-  parsed: ParsedArgs,
-  name: string,
-): bigint | undefined {
+function bigintFlag(parsed: ParsedArgs, name: string): bigint | undefined {
   const value = stringFlag(parsed, name);
   if (value === undefined) {
     return undefined;
@@ -224,8 +218,7 @@ function chainFlag(parsed: ParsedArgs): ChainId {
 function json(value: unknown): string {
   return JSON.stringify(
     value,
-    (_key, entry) =>
-      typeof entry === "bigint" ? entry.toString() : entry,
+    (_key, entry) => (typeof entry === "bigint" ? entry.toString() : entry),
     2,
   );
 }
@@ -253,10 +246,7 @@ function summarizeCycle(cycle: WorkerCycleResult): string {
     .join("\n");
 }
 
-async function listCommand(
-  parsed: ParsedArgs,
-  io: CliIo,
-): Promise<number> {
+async function listCommand(parsed: ParsedArgs, io: CliIo): Promise<number> {
   assertKnownFlags(parsed, ["store-dir", "json"]);
   const store = new FileTransferStore(
     stringFlag(parsed, "store-dir", DEFAULT_STORE_DIR) as string,
@@ -339,10 +329,7 @@ async function reconcileCommand(
   return 0;
 }
 
-async function resolveCommand(
-  parsed: ParsedArgs,
-  io: CliIo,
-): Promise<number> {
+async function resolveCommand(parsed: ParsedArgs, io: CliIo): Promise<number> {
   assertKnownFlags(parsed, ["store-dir", "from", "burn-tx", "network", "json"]);
   const from = chainFlag(parsed);
   const burnTxHash = requiredStringFlag(parsed, "burn-tx");
@@ -363,10 +350,7 @@ async function resolveCommand(
   if (resolved.forwardRecipient) {
     write(io, `forward recipient: ${resolved.forwardRecipient}`);
   }
-  write(
-    io,
-    `attestation: ${resolved.attestation ? "ready" : "pending"}`,
-  );
+  write(io, `attestation: ${resolved.attestation ? "ready" : "pending"}`);
   return 0;
 }
 
@@ -381,12 +365,11 @@ function arcOptions(
   return {
     network,
     startBlock,
-    confirmations:
-      integerFlag(
-        parsed,
-        "arc-confirmations",
-        DEFAULT_ARC_CONFIRMATIONS,
-      ) as number,
+    confirmations: integerFlag(
+      parsed,
+      "arc-confirmations",
+      DEFAULT_ARC_CONFIRMATIONS,
+    ) as number,
     reorgWindow: bigintFlag(parsed, "arc-reorg-window"),
     burns: booleanFlag(parsed, "arc-burns", true),
     mints: booleanFlag(parsed, "arc-mints", true),
@@ -409,10 +392,7 @@ function stellarOptions(
   };
 }
 
-async function syncCommand(
-  parsed: ParsedArgs,
-  io: CliIo,
-): Promise<number> {
+async function syncCommand(parsed: ParsedArgs, io: CliIo): Promise<number> {
   assertKnownFlags(parsed, [
     "store-dir",
     "cursor-dir",
@@ -484,10 +464,7 @@ async function syncCommand(
   return 0;
 }
 
-async function serveCommand(
-  parsed: ParsedArgs,
-  io: CliIo,
-): Promise<number> {
+async function serveCommand(parsed: ParsedArgs, io: CliIo): Promise<number> {
   assertKnownFlags(parsed, [
     "store-dir",
     "cursor-dir",
@@ -513,10 +490,7 @@ async function serveCommand(
   return await runUntilSignal(api, io);
 }
 
-async function storeCommand(
-  parsed: ParsedArgs,
-  io: CliIo,
-): Promise<number> {
+async function storeCommand(parsed: ParsedArgs, io: CliIo): Promise<number> {
   assertKnownFlags(parsed, [
     "store-dir",
     "cursor-dir",

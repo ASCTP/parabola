@@ -17,7 +17,10 @@ export class InvalidStateTransitionError extends KernelError {
   readonly event: TransferEventType;
 
   constructor(from: TransferPhase, event: TransferEventType) {
-    super(`Invalid transfer transition: ${from} to ${event}`, "INVALID_STATE_TRANSITION");
+    super(
+      `Invalid transfer transition: ${from} to ${event}`,
+      "INVALID_STATE_TRANSITION",
+    );
     this.from = from;
     this.event = event;
   }

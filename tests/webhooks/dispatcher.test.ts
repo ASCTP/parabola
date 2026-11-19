@@ -24,9 +24,7 @@ import { verifyWebhookSignature } from "../../src/webhooks/signature.js";
 const NOW = 1_700_000_000_000;
 const SECRET = "whsec_test";
 
-function endpoint(
-  overrides: Partial<WebhookEndpoint> = {},
-): WebhookEndpoint {
+function endpoint(overrides: Partial<WebhookEndpoint> = {}): WebhookEndpoint {
   return {
     id: "endpoint_1",
     url: "https://example.com/hooks",
@@ -35,9 +33,7 @@ function endpoint(
   };
 }
 
-function event(
-  overrides: Partial<WebhookEvent> = {},
-): WebhookEvent {
+function event(overrides: Partial<WebhookEvent> = {}): WebhookEvent {
   return {
     id: "evt_1",
     type: "transfer.minted",
@@ -65,9 +61,10 @@ interface FetchCall {
   request: WebhookHttpRequest;
 }
 
-function fakeFetch(
-  ...results: Array<WebhookHttpResponse | Error>
-): { fetch: WebhookFetch; calls: FetchCall[] } {
+function fakeFetch(...results: Array<WebhookHttpResponse | Error>): {
+  fetch: WebhookFetch;
+  calls: FetchCall[];
+} {
   const calls: FetchCall[] = [];
   const fetch: WebhookFetch = async (url, request) => {
     calls.push({ url, request });
@@ -137,10 +134,7 @@ describe("webhook dispatcher enqueue", () => {
 
   it("supports a wildcard event filter", async () => {
     const { fetch } = fakeFetch();
-    const subject = dispatcher(
-      [endpoint({ events: ["*"] })],
-      fetch,
-    );
+    const subject = dispatcher([endpoint({ events: ["*"] })], fetch);
 
     expect(await subject.enqueue(event())).toHaveLength(1);
   });
@@ -221,12 +215,12 @@ describe("webhook dispatcher enqueue", () => {
     const { fetch } = fakeFetch();
     const subject = dispatcher([endpoint()], fetch);
 
-    await expect(
-      subject.enqueue(event({ id: "" })),
-    ).rejects.toThrow(/id must not be empty/);
-    await expect(
-      subject.enqueue(event({ type: "" })),
-    ).rejects.toThrow(/type must not be empty/);
+    await expect(subject.enqueue(event({ id: "" }))).rejects.toThrow(
+      /id must not be empty/,
+    );
+    await expect(subject.enqueue(event({ type: "" }))).rejects.toThrow(
+      /type must not be empty/,
+    );
     await expect(
       subject.enqueue(event({ createdAt: Number.NaN })),
     ).rejects.toThrow(/createdAt must be finite/);
@@ -261,17 +255,13 @@ describe("webhook dispatcher delivery", () => {
     const call = calls[0] as FetchCall;
     expect(call.url).toBe("https://example.com/hooks");
     expect(call.request.method).toBe("POST");
-    expect(call.request.headers["content-type"]).toBe(
-      "application/json",
-    );
+    expect(call.request.headers["content-type"]).toBe("application/json");
     expect(call.request.headers["x-parabola-event-id"]).toBe("evt_1");
     expect(call.request.headers["x-parabola-event-type"]).toBe(
       "transfer.minted",
     );
     expect(call.request.headers["x-parabola-attempt"]).toBe("1");
-    expect(call.request.headers["x-parabola-timestamp"]).toBe(
-      "1700000000",
-    );
+    expect(call.request.headers["x-parabola-timestamp"]).toBe("1700000000");
     expect(
       verifyWebhookSignature({
         secret: SECRET,
@@ -286,9 +276,7 @@ describe("webhook dispatcher delivery", () => {
       data: { idempotencyKey: "order-1", amount: "10" },
     });
 
-    const stored = await store.get(
-      webhookDeliveryId("evt_1", "endpoint_1"),
-    );
+    const stored = await store.get(webhookDeliveryId("evt_1", "endpoint_1"));
     expect(stored?.status).toBe("delivered");
     expect(stored?.attempts).toBe(1);
     expect(stored?.deliveredAt).toBe(NOW);
@@ -316,10 +304,7 @@ describe("webhook dispatcher delivery", () => {
 
   it("retries a server error with backoff and then succeeds", async () => {
     const store = new MemoryWebhookDeliveryStore();
-    const { fetch } = fakeFetch(
-      response(500),
-      response(200),
-    );
+    const { fetch } = fakeFetch(response(500), response(200));
     const subject = dispatcher([endpoint()], fetch, store);
     await subject.enqueue(event());
 
@@ -330,9 +315,7 @@ describe("webhook dispatcher delivery", () => {
       responseStatus: 500,
       error: "HTTP 500",
     });
-    expect(
-      (await store.list())[0]?.nextAttemptAt,
-    ).toBe(NOW + 100);
+    expect((await store.list())[0]?.nextAttemptAt).toBe(NOW + 100);
 
     const early = await subject.dispatchDue(NOW + 99);
     expect(early.deliveries).toEqual([]);
@@ -378,16 +361,11 @@ describe("webhook dispatcher delivery", () => {
 
     await subject.dispatchDue(NOW);
 
-    expect(
-      (await store.list())[0]?.nextAttemptAt,
-    ).toBe(NOW + 2_000);
-    expect(
-      (await subject.dispatchDue(NOW + 1_999)).deliveries,
-    ).toEqual([]);
-    expect(
-      (await subject.dispatchDue(NOW + 2_000)).deliveries[0]
-        ?.status,
-    ).toBe("delivered");
+    expect((await store.list())[0]?.nextAttemptAt).toBe(NOW + 2_000);
+    expect((await subject.dispatchDue(NOW + 1_999)).deliveries).toEqual([]);
+    expect((await subject.dispatchDue(NOW + 2_000)).deliveries[0]?.status).toBe(
+      "delivered",
+    );
   });
 
   it("retries network failures until the attempt limit", async () => {
@@ -473,10 +451,7 @@ describe("webhook dispatcher replay", () => {
   it("replays a failed delivery", async () => {
     const store = new MemoryWebhookDeliveryStore();
     const metrics = new MemoryMetrics();
-    const { fetch } = fakeFetch(
-      response(400),
-      response(200),
-    );
+    const { fetch } = fakeFetch(response(400), response(200));
     const subject = dispatcher([endpoint()], fetch, store, {
       metrics,
     });
@@ -517,9 +492,9 @@ describe("webhook dispatcher replay", () => {
       new MemoryWebhookDeliveryStore(),
     );
 
-    await expect(
-      subject.redeliver("missing"),
-    ).rejects.toThrow(WebhookDeliveryNotFoundError);
+    await expect(subject.redeliver("missing")).rejects.toThrow(
+      WebhookDeliveryNotFoundError,
+    );
   });
 
   it("rejects a delivery that has not failed", async () => {
@@ -530,9 +505,7 @@ describe("webhook dispatcher replay", () => {
     await subject.dispatchDue(NOW);
 
     await expect(
-      subject.redeliver(
-        webhookDeliveryId("evt_1", "endpoint_1"),
-      ),
+      subject.redeliver(webhookDeliveryId("evt_1", "endpoint_1")),
     ).rejects.toThrow(WebhookDeliveryStateError);
   });
 });
@@ -563,27 +536,26 @@ describe("webhook dispatcher configuration", () => {
   it("rejects duplicate endpoint ids", () => {
     const { fetch } = fakeFetch();
 
-    expect(
-      () =>
-        dispatcher([endpoint(), endpoint()], fetch),
-    ).toThrow(WebhookConfigurationError);
+    expect(() => dispatcher([endpoint(), endpoint()], fetch)).toThrow(
+      WebhookConfigurationError,
+    );
   });
 
   it("rejects invalid endpoint URLs, secrets, and ids", () => {
     const { fetch } = fakeFetch();
 
-    expect(() =>
-      dispatcher([endpoint({ url: "not a url" })], fetch),
-    ).toThrow(/valid URL/);
+    expect(() => dispatcher([endpoint({ url: "not a url" })], fetch)).toThrow(
+      /valid URL/,
+    );
     expect(() =>
       dispatcher([endpoint({ url: "ftp://example.com/hooks" })], fetch),
     ).toThrow(/http or https/);
-    expect(() =>
-      dispatcher([endpoint({ secret: "" })], fetch),
-    ).toThrow(/secret must not be empty/);
-    expect(() =>
-      dispatcher([endpoint({ id: " " })], fetch),
-    ).toThrow(/id must not be empty/);
+    expect(() => dispatcher([endpoint({ secret: "" })], fetch)).toThrow(
+      /secret must not be empty/,
+    );
+    expect(() => dispatcher([endpoint({ id: " " })], fetch)).toThrow(
+      /id must not be empty/,
+    );
   });
 
   it("rejects invalid dispatcher options", () => {

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { TransferRecord, TransferStore } from "../../src/execution/contracts.js";
+import type {
+  TransferRecord,
+  TransferStore,
+} from "../../src/execution/contracts.js";
 import {
   InvalidIdempotencyKeyError,
   TransferConflictError,
@@ -10,8 +13,7 @@ import {
 import { MemoryTransferStore } from "../../src/execution/memory-store.js";
 import { reconcileTransfer } from "../../src/execution/reconciler.js";
 
-const RECIPIENT =
-  "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2";
+const RECIPIENT = "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2";
 
 function record(overrides: Partial<TransferRecord> = {}): TransferRecord {
   return {
@@ -78,9 +80,11 @@ describe("transfer reconciler", () => {
       }),
     ).rejects.toBeInstanceOf(TransferNotFoundError);
 
-    await expect(store.claim("missing", "other-owner", 1_000)).resolves.toEqual({
-      status: "claimed",
-    });
+    await expect(store.claim("missing", "other-owner", 1_000)).resolves.toEqual(
+      {
+        status: "claimed",
+      },
+    );
   });
 
   it("promotes a burning transfer with observed burn evidence", async () => {
@@ -289,7 +293,9 @@ describe("transfer reconciler", () => {
       }),
     ).rejects.toBeInstanceOf(TransferPersistenceError);
 
-    await expect(store.claim("order-1", "other-owner", 1_000)).resolves.toMatchObject({
+    await expect(
+      store.claim("order-1", "other-owner", 1_000),
+    ).resolves.toMatchObject({
       status: "claimed",
     });
   });

@@ -1,9 +1,7 @@
 import type { WebhookEndpoint } from "./contracts.js";
 import { WebhookConfigurationError } from "./errors.js";
 
-export function assertWebhookEndpoint(
-  endpoint: WebhookEndpoint,
-): void {
+export function assertWebhookEndpoint(endpoint: WebhookEndpoint): void {
   if (endpoint.id.trim() === "") {
     throw new WebhookConfigurationError(
       "Webhook endpoint id must not be empty",

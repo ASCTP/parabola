@@ -20,13 +20,8 @@ export class RemoteTransferStore implements TransferStore {
     this.client = new RemoteStoreClient(options);
   }
 
-  async get(
-    idempotencyKey: string,
-  ): Promise<TransferRecord | undefined> {
-    const response = await this.client.request(
-      "GET",
-      pathFor(idempotencyKey),
-    );
+  async get(idempotencyKey: string): Promise<TransferRecord | undefined> {
+    const response = await this.client.request("GET", pathFor(idempotencyKey));
     if (response.status === 404) {
       return undefined;
     }
@@ -43,11 +38,7 @@ export class RemoteTransferStore implements TransferStore {
   }
 
   async create(record: TransferRecord): Promise<boolean> {
-    const response = await this.client.request(
-      "POST",
-      "/transfers",
-      record,
-    );
+    const response = await this.client.request("POST", "/transfers", record);
     const body = ensureOk(response) as { created: boolean };
     return body.created;
   }
@@ -96,10 +87,7 @@ export class RemoteTransferStore implements TransferStore {
     return body.renewed;
   }
 
-  async release(
-    idempotencyKey: string,
-    owner: string,
-  ): Promise<void> {
+  async release(idempotencyKey: string, owner: string): Promise<void> {
     const response = await this.client.request(
       "POST",
       `${pathFor(idempotencyKey)}/release`,

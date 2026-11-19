@@ -3,7 +3,10 @@ import { AttestationNotReadyError, TransferError } from "../../src/errors.js";
 import type { SettlementKernel } from "../../src/kernel/contracts.js";
 import { TransferProgressError } from "../../src/kernel/errors.js";
 import type { TransferPhase } from "../../src/kernel/state.js";
-import type { TransferRecord, TransferStore } from "../../src/execution/contracts.js";
+import type {
+  TransferRecord,
+  TransferStore,
+} from "../../src/execution/contracts.js";
 import {
   InvalidIdempotencyKeyError,
   TransferConflictError,
@@ -18,8 +21,7 @@ import type {
   TransferResult,
 } from "../../src/types.js";
 
-const RECIPIENT =
-  "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2";
+const RECIPIENT = "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2";
 
 const DESTINATION_SIGNER = { publicKey: "GDESTINATION" };
 
@@ -386,9 +388,9 @@ describe("durable transfer executor", () => {
     const outcomes = await settled;
 
     expect(calls).toBe(1);
-    expect(outcomes.filter((outcome) => outcome.status === "fulfilled")).toHaveLength(
-      1,
-    );
+    expect(
+      outcomes.filter((outcome) => outcome.status === "fulfilled"),
+    ).toHaveLength(1);
     const rejected = outcomes.find((outcome) => outcome.status === "rejected");
     expect(rejected).toMatchObject({
       status: "rejected",
@@ -471,9 +473,14 @@ describe("durable transfer executor", () => {
     } as unknown as TransferParams;
 
     await expect(
-      executeTransfer(kernel(async () => result()), store, otherSource, {
-        idempotencyKey: "order-1",
-      }),
+      executeTransfer(
+        kernel(async () => result()),
+        store,
+        otherSource,
+        {
+          idempotencyKey: "order-1",
+        },
+      ),
     ).rejects.toMatchObject({ reason: "mismatch" });
   });
 
@@ -593,9 +600,7 @@ describe("durable transfer executor", () => {
 
   it("does not resume an indeterminate mint", async () => {
     const store = new MemoryTransferStore();
-    await store.create(
-      record({ phase: "minting", burnTxHash: "burn-9" }),
-    );
+    await store.create(record({ phase: "minting", burnTxHash: "burn-9" }));
     let mintCalls = 0;
 
     const err = await executeTransfer(
@@ -676,9 +681,9 @@ describe("durable transfer executor", () => {
       { idempotencyKey: "order-1" },
     );
 
-    await expect(store.claim("order-1", "other", 60_000)).resolves.toMatchObject(
-      { status: "claimed" },
-    );
+    await expect(
+      store.claim("order-1", "other", 60_000),
+    ).resolves.toMatchObject({ status: "claimed" });
   });
 
   it("releases the lease after a failed transfer", async () => {
@@ -693,9 +698,9 @@ describe("durable transfer executor", () => {
       { idempotencyKey: "order-1" },
     ).catch(() => undefined);
 
-    await expect(store.claim("order-1", "other", 60_000)).resolves.toMatchObject(
-      { status: "claimed" },
-    );
+    await expect(
+      store.claim("order-1", "other", 60_000),
+    ).resolves.toMatchObject({ status: "claimed" });
   });
 
   it("blocks a resumable transfer while another owner holds the lease", async () => {

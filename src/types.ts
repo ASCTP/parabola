@@ -17,7 +17,10 @@ export interface ArcSigner {
 }
 
 /** Signs a prepared Stellar transaction XDR and returns the signed XDR. */
-export type StellarSignFunction = (xdr: string, networkPassphrase: string) => Promise<string>;
+export type StellarSignFunction = (
+  xdr: string,
+  networkPassphrase: string,
+) => Promise<string>;
 
 /**
  * Signs Stellar transactions. `publicKey` is always required. At least one signing route
@@ -90,8 +93,18 @@ export type TransferOptions = ArcDestinationOptions | StellarDestinationOptions;
  */
 export type TransferParams = TransferParamsBase &
   (
-    | { from: "arc"; to: "stellar"; signer: ArcSigner; options?: StellarDestinationOptions }
-    | { from: "stellar"; to: "arc"; signer: StellarSigner; options?: ArcDestinationOptions }
+    | {
+        from: "arc";
+        to: "stellar";
+        signer: ArcSigner;
+        options?: StellarDestinationOptions;
+      }
+    | {
+        from: "stellar";
+        to: "arc";
+        signer: StellarSigner;
+        options?: ArcDestinationOptions;
+      }
   );
 
 interface TransferParamsBase {

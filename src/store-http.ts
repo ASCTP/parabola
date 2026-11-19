@@ -40,8 +40,7 @@ export function ensureOk(response: RemoteStoreResponse): unknown {
   if (response.status < 200 || response.status >= 300) {
     throw new RemoteStoreError(
       response.status,
-      errorMessage(response.body) ??
-        `Remote store returned ${response.status}`,
+      errorMessage(response.body) ?? `Remote store returned ${response.status}`,
       response.body,
     );
   }
@@ -65,9 +64,7 @@ export class RemoteStoreClient {
       );
     }
     if (url.username !== "" || url.password !== "") {
-      throw new RangeError(
-        "Remote store url must not include credentials",
-      );
+      throw new RangeError("Remote store url must not include credentials");
     }
     this.baseUrl = `${url.origin}${url.pathname.replace(/\/+$/, "")}`;
     this.token = options.token;
@@ -101,10 +98,8 @@ export class RemoteStoreClient {
         body:
           body === undefined
             ? undefined
-            : JSON.stringify(
-                body,
-                (_key, value) =>
-                  typeof value === "bigint" ? value.toString() : value,
+            : JSON.stringify(body, (_key, value) =>
+                typeof value === "bigint" ? value.toString() : value,
               ),
         signal: controller.signal,
       });

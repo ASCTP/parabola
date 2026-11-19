@@ -7,8 +7,7 @@ import { main } from "../src/cli.js";
 import type { TransferRecord } from "../src/execution/contracts.js";
 import { FileTransferStore } from "../src/execution/file-store.js";
 
-const RECIPIENT =
-  "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2";
+const RECIPIENT = "GCY3PLGZQZWVKQELW7GCHQVLVZGRMGI5R4HODX6QZM7ETJSPHBFVJPY2";
 
 let directory: string;
 let cursorDirectory: string;
@@ -151,20 +150,19 @@ describe("parabola CLI", () => {
   it("requires a burn hash for resolve", async () => {
     const output = capture();
 
-    await expect(
-      main(["resolve", "--from", "arc"], output.io),
-    ).resolves.toBe(1);
-    expect(output.stderr.join("")).toContain("Missing required option --burn-tx");
+    await expect(main(["resolve", "--from", "arc"], output.io)).resolves.toBe(
+      1,
+    );
+    expect(output.stderr.join("")).toContain(
+      "Missing required option --burn-tx",
+    );
   });
 
   it("rejects an invalid resolve source", async () => {
     const output = capture();
 
     await expect(
-      main(
-        ["resolve", "--from", "solana", "--burn-tx", "burn-1"],
-        output.io,
-      ),
+      main(["resolve", "--from", "solana", "--burn-tx", "burn-1"], output.io),
     ).resolves.toBe(1);
     expect(output.stderr.join("")).toContain("--from must be arc or stellar");
   });
@@ -174,13 +172,7 @@ describe("parabola CLI", () => {
 
     await expect(
       main(
-        [
-          "sync",
-          "--store-dir",
-          directory,
-          "--cursor-dir",
-          cursorDirectory,
-        ],
+        ["sync", "--store-dir", directory, "--cursor-dir", cursorDirectory],
         output.io,
       ),
     ).resolves.toBe(1);
@@ -249,9 +241,7 @@ describe("parabola CLI", () => {
   it("rejects unexpected positional arguments", async () => {
     const output = capture();
 
-    await expect(
-      main(["list", "extra"], output.io),
-    ).resolves.toBe(1);
+    await expect(main(["list", "extra"], output.io)).resolves.toBe(1);
     expect(output.stderr.join("")).toContain("Unexpected argument: extra");
   });
 

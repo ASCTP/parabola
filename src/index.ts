@@ -11,7 +11,12 @@ export { checkStellarRecipientReady } from "./chains/stellar.js";
 // structurally similar but distinct Keypair types, which the compiler cannot reconcile and
 // which only surfaces in the signing path at runtime. Importing it from here keeps one copy.
 export { Keypair } from "@stellar/stellar-sdk";
-export { ARC_TESTNET, ARC_MAINNET, STELLAR_TESTNET, STELLAR_MAINNET } from "./constants.js";
+export {
+  ARC_TESTNET,
+  ARC_MAINNET,
+  STELLAR_TESTNET,
+  STELLAR_MAINNET,
+} from "./constants.js";
 export {
   TransferError,
   SubmissionTimeoutError,

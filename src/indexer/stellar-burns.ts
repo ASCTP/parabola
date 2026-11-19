@@ -9,10 +9,7 @@ import {
 } from "../execution/reconciler.js";
 import { toRawAmount } from "../utils/amount.js";
 import { evmAddressToBytes32 } from "../utils/encoding.js";
-import type {
-  IndexerSummary,
-  StellarBurnIndexOptions,
-} from "./contracts.js";
+import type { IndexerSummary, StellarBurnIndexOptions } from "./contracts.js";
 import { InvalidLedgerRangeError } from "./errors.js";
 import { readStellarEvents } from "./stellar-events.js";
 
@@ -44,9 +41,7 @@ function bytesToHex(value: unknown): Hex | undefined {
   return toHex(value);
 }
 
-function decodeBurn(
-  event: rpc.Api.EventResponse,
-): StellarBurnLog | undefined {
+function decodeBurn(event: rpc.Api.EventResponse): StellarBurnLog | undefined {
   if (
     event.type !== "contract" ||
     !event.inSuccessfulContractCall ||
@@ -55,19 +50,13 @@ function decodeBurn(
     return undefined;
   }
 
-  const name = event.topic[0]
-    ? scValToNative(event.topic[0])
-    : undefined;
+  const name = event.topic[0] ? scValToNative(event.topic[0]) : undefined;
   if (name !== EVENT_NAME) {
     return undefined;
   }
 
-  const burnToken = event.topic[1]
-    ? scValToNative(event.topic[1])
-    : undefined;
-  const depositor = event.topic[2]
-    ? scValToNative(event.topic[2])
-    : undefined;
+  const burnToken = event.topic[1] ? scValToNative(event.topic[1]) : undefined;
+  const depositor = event.topic[2] ? scValToNative(event.topic[2]) : undefined;
   if (typeof burnToken !== "string" || typeof depositor !== "string") {
     return undefined;
   }
@@ -76,15 +65,7 @@ function decodeBurn(
   if (!Array.isArray(data)) {
     return undefined;
   }
-  const [
-    amount,
-    mintRecipient,
-    destinationDomain,
-    ,
-    ,
-    ,
-    hookData,
-  ] = data;
+  const [amount, mintRecipient, destinationDomain, , , , hookData] = data;
   if (typeof amount !== "bigint" || typeof destinationDomain !== "number") {
     return undefined;
   }
@@ -127,10 +108,7 @@ function expectedBurn(record: TransferRecord): ExpectedBurn {
   };
 }
 
-function matchesBurn(
-  expected: ExpectedBurn,
-  burn: StellarBurnLog,
-): boolean {
+function matchesBurn(expected: ExpectedBurn, burn: StellarBurnLog): boolean {
   return (
     burn.burnToken === expected.burnToken &&
     burn.depositor === expected.depositor &&
