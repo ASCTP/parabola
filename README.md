@@ -383,9 +383,10 @@ parabola resolve --from arc --burn-tx 0x...
 parabola sync --arc-start-block 1000000 --arc-confirmations 12
 parabola sync --stellar-start-ledger 500000 --watch --interval 15000
 parabola serve --token "$PARABOLA_API_TOKEN" --port 8787
+parabola store --token "$PARABOLA_STORE_TOKEN" --port 8788
 ```
 
-`--json` prints machine-readable output. `sync --watch` runs the indexer worker on an interval and stops cleanly on `SIGINT` or `SIGTERM`. `serve` uses the same shutdown behavior.
+`--json` prints machine-readable output. `sync --watch` runs the indexer worker on an interval and stops cleanly on `SIGINT` or `SIGTERM`. `serve` and `store` use the same shutdown behavior. `store` starts the remote store server over file backed transfer and cursor stores, and reads its bearer token from `--token` or `PARABOLA_STORE_TOKEN`.
 
 ## Observability
 
