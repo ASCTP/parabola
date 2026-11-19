@@ -1,4 +1,5 @@
 import { createApiServer } from "./api.js";
+import { createStoreServer } from "./store-server.js";
 import { FileTransferStore } from "./execution/file-store.js";
 import { FileIndexerCursorStore } from "./indexer/cursor.js";
 import { createSettlementRuntime } from "./runtime.js";
@@ -28,6 +29,7 @@ Commands:
   resolve    Read what a burn has already committed to
   sync       Advance indexer cursors once or continuously
   serve      Start the HTTP operations API
+  store      Start the HTTP store and lease server
 
 Common options:
   --store-dir <path>      Transfer store directory (default: ${DEFAULT_STORE_DIR})
@@ -62,6 +64,13 @@ serve:
   --host <name>           Bind address (default: 127.0.0.1)
   --port <n>              Bind port (default: 8787)
   --token <value>         Bearer token, or set PARABOLA_API_TOKEN
+
+store:
+  --store-dir <path>      Transfer store directory (default: ${DEFAULT_STORE_DIR})
+  --cursor-dir <path>     Cursor store directory (default: ${DEFAULT_CURSOR_DIR})
+  --host <name>           Bind address (default: 127.0.0.1)
+  --port <n>              Bind port (default: 8788)
+  --token <value>         Bearer token, or set PARABOLA_STORE_TOKEN
 `;
 
 interface ParsedArgs {
@@ -501,14 +510,50 @@ async function serveCommand(
     token: stringFlag(parsed, "token", process.env.PARABOLA_API_TOKEN),
   });
 
-  const address = await api.listen();
+  return await runUntilSignal(api, io);
+}
+
+async function storeCommand(
+  parsed: ParsedArgs,
+  io: CliIo,
+): Promise<number> {
+  assertKnownFlags(parsed, [
+    "store-dir",
+    "cursor-dir",
+    "host",
+    "port",
+    "token",
+  ]);
+
+  const server = createStoreServer({
+    transferStore: new FileTransferStore(
+      stringFlag(parsed, "store-dir", DEFAULT_STORE_DIR) as string,
+    ),
+    cursorStore: new FileIndexerCursorStore(
+      stringFlag(parsed, "cursor-dir", DEFAULT_CURSOR_DIR) as string,
+    ),
+    host: stringFlag(parsed, "host", "127.0.0.1"),
+    port: integerFlag(parsed, "port", 8788) as number,
+    token: stringFlag(parsed, "token", process.env.PARABOLA_STORE_TOKEN),
+  });
+  return await runUntilSignal(server, io);
+}
+
+async function runUntilSignal(
+  server: {
+    listen(): Promise<{ url: string }>;
+    close(): Promise<void>;
+  },
+  io: CliIo,
+): Promise<number> {
+  const address = await server.listen();
   write(io, `Listening on ${address.url}`);
 
   await new Promise<void>((resolve) => {
     const shutdown = () => {
       process.off("SIGINT", shutdown);
       process.off("SIGTERM", shutdown);
-      void api.close().finally(resolve);
+      void server.close().finally(resolve);
     };
     process.once("SIGINT", shutdown);
     process.once("SIGTERM", shutdown);
@@ -544,6 +589,8 @@ export async function main(
         return await syncCommand(parsed, io);
       case "serve":
         return await serveCommand(parsed, io);
+      case "store":
+        return await storeCommand(parsed, io);
       default:
         throw new Error(`Unknown command: ${command}`);
     }
