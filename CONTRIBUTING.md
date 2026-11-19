@@ -323,7 +323,7 @@ docs: document completeMint in the README
 
 ## Code Standards
 
-- **Formatting and linting:** must pass `pnpm typecheck` with zero errors.
+- **Formatting and linting:** must pass `pnpm lint`, `pnpm format:check`, and `pnpm typecheck` with zero errors. Run `pnpm format` to apply the Biome formatter.
 - **Types:** no `any`. Use precise types from `src/types.ts`; narrow `unknown` explicitly.
 - **Naming:**
   - `PascalCase` for types and interfaces
@@ -382,6 +382,9 @@ Pull requests are reviewed within 72 hours of submission. You will receive one o
 ## Running Checks Locally
 
 ```bash
+pnpm lint             # biome lint
+pnpm format:check     # biome format without writing
+pnpm format           # apply the Biome formatter
 pnpm typecheck        # tsc --noEmit
 pnpm test             # vitest
 pnpm test:coverage    # vitest with v8 coverage and the enforced thresholds
