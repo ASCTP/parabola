@@ -580,6 +580,7 @@ Network configuration used internally:
 - [circlefin/stellar-cctp](https://github.com/circlefin/stellar-cctp): Circle's official Stellar CCTP contract source and reference TypeScript client (`examples/stellar.ts`, `examples/stellar-utils.ts`). This is the canonical source for contract argument order and hook-data byte layout; check it first before touching `src/chains/stellar.ts` or `src/utils/encoding.ts`'s Stellar-side functions.
 - [CCTP developer docs](https://developers.circle.com/cctp): general CCTP V2 concepts, supported chains and domains, fees.
 - [Arc docs](https://docs.arc.io): Arc network config and contract addresses.
+- [COMPATIBILITY.md](COMPATIBILITY.md): the public API, versioning, supported runtimes, and deprecation policy.
 - [ARCHITECTURE.md](ARCHITECTURE.md) and [docs/adr](docs/adr): the kernel and provider boundary, the durable operation surface, the provider conformance decision, the webhook delivery and endpoint management decisions, and the remote store and lease server decision.
 
 ## Development

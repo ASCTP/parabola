@@ -201,7 +201,7 @@ parabola/
     webhooks/            # signing, delivery, endpoint, replay, and store tests
   examples/              # runnable examples (mainnet default, NETWORK=testnet override)
   demos/                 # demo apps: see demos/README.md; wallet-transfer-demo/ is the first
-  scripts/               # address verification and smoke test
+  scripts/               # address verification, smoke test, and release notes extraction
 ```
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the kernel and provider boundary, and [docs/adr](docs/adr) for the decisions behind it.
@@ -406,7 +406,9 @@ Releases are maintainer-only and tag-triggered; contributors don't need to do an
 1. On `main`, bump `version` in `package.json` (semver) and move the relevant `[Unreleased]` entries in `CHANGELOG.md` under a new `## [X.Y.Z] - YYYY-MM-DD` heading.
 2. Commit that as `chore(release): vX.Y.Z`, push, and confirm CI is green.
 3. Tag it and push the tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.
-4. `.github/workflows/publish.yml` picks up the tag, re-runs typecheck/test/build, confirms the tag version matches `package.json`, and publishes `@asctp/parabola` to npm. Provenance attestations are generated automatically as part of this.
+4. `.github/workflows/publish.yml` picks up the tag, re-runs lint, format check, typecheck, tests with coverage, and build, confirms the tag version matches `package.json`, extracts the matching `CHANGELOG.md` section with `scripts/release-notes.mjs`, publishes `@asctp/parabola` to npm, and creates a GitHub release from that section. Provenance attestations are generated automatically as part of this. The release fails before publishing if the changelog has no section for the tag version.
+
+The versioning and deprecation rules are in [COMPATIBILITY.md](COMPATIBILITY.md).
 
 Publishing authenticates via npm's Trusted Publishing (OIDC): npm trusts this exact repository and workflow file directly, so there's no long-lived token to provision, leak, or rotate. That trust relationship is configured once on npm's side (`@asctp/parabola` package settings > Trusted Publisher), by whoever holds the npm org access, not something CI or a contributor can provision. If the workflow file is ever renamed, publishing breaks until the Trusted Publisher config is updated to match.
 

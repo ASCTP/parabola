@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - API request metrics and structured request events, plus task and cycle metrics in the indexer worker.
 - A coverage gate. `pnpm test:coverage` measures v8 coverage over `src/` and fails when statements, branches, functions, or lines fall below the configured thresholds. CI runs it on Node 22.
 - A lint and format gate. `pnpm lint` and `pnpm format:check` run Biome over `src/`, `tests/`, and `scripts/`, and CI runs both before typecheck.
+- A compatibility policy in `COMPATIBILITY.md` covering public API, versioning, supported runtimes, and deprecation. The publish workflow now runs the lint, format, and coverage gates, extracts the release notes from this changelog with `scripts/release-notes.mjs`, and creates a GitHub release.
 - CodeQL analysis and Renovate dependency updates. CI now cancels superseded runs, applies least-privilege permissions, and checks the publish tarball with `npm pack --dry-run`.
 
 ## [0.4.0] - 2026-10-07
