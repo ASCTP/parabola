@@ -384,6 +384,7 @@ Pull requests are reviewed within 72 hours of submission. You will receive one o
 ```bash
 pnpm typecheck        # tsc --noEmit
 pnpm test             # vitest
+pnpm test:coverage    # vitest with v8 coverage and the enforced thresholds
 pnpm build            # tsup, emits ESM + CJS + type declarations to dist/
 node dist/cli-entry.js --help # inspect the operator CLI after a build
 pnpm verify:addresses # confirms src/constants.ts addresses are live on-chain (no funded account needed)
