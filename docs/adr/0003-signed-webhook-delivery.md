@@ -36,7 +36,7 @@ Positive:
 Negative:
 
 - The file store is single-host.
-- Endpoint management and dead-letter replay are operator work in this slice.
+- Endpoint management and dead-letter replay are operator work.
 - At least once delivery requires receiver-side deduplication.
 - The package now owns another public subpath and more contracts.
 

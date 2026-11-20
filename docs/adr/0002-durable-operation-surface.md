@@ -57,7 +57,7 @@ The trade is deliberate. A settlement layer that cannot recover an indeterminate
 ## Alternatives considered
 
 - Keep the operation surface outside the package. Rejected because every integrator would rebuild leases, recovery, and cursors with different semantics.
-- Put the HTTP API and CLI in separate packages. Rejected for now because they are thin adapters over the same runtime and benefit from versioned together.
+- Put the HTTP API and CLI in separate packages. Rejected because they are thin adapters over the same runtime and benefit from being versioned together.
 - Ship only static conformance checks. Rejected because the burn and mint paths are where provider bugs become fund losses. The live probe is opt-in so it does not run by accident.
 - Use a hosted metrics backend. Rejected because the package should not choose an operator's observability stack.
 

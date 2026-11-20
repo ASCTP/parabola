@@ -1,7 +1,5 @@
 # Architecture
 
-Status: accepted for the current slice.
-
 ## Purpose
 
 Parabola is a settlement kernel for moving native USDC across CCTP domains. The public SDK is one interface to that kernel. The kernel owns orchestration and transfer state. Providers own all network I/O. The boundary exists so the same transfer can be driven by the SDK, a durable executor, a CLI, or an HTTP service without rewriting the protocol logic.
@@ -60,7 +58,7 @@ This rule is what makes the kernel testable with fake providers and lets the exe
 - minting -> minted on MINT_CONFIRMED.
 - minting -> recoverable on RECOVERY_REQUIRED.
 
-`minted`, `pending`, `recoverable`, and `failed` are terminal in this slice. An invalid transition throws `InvalidStateTransitionError` with the phase and event.
+`minted`, `pending`, `recoverable`, and `failed` are terminal. An invalid transition throws `InvalidStateTransitionError` with the phase and event.
 
 `recoverable` means the source-chain burn exists but the transfer did not finish. The executor persists this phase and the recovery hashes.
 
@@ -149,61 +147,18 @@ The public error classes in `src/errors.ts` remain the contract for callers. The
 - `completeMint` and `resolveBurn` propagate `AttestationNotReadyError` unwrapped.
 - The kernel never discards a burn hash after the source-chain burn has been submitted.
 
-`KernelError` and `InvalidStateTransitionError` are internal in this slice. They describe programming errors in the state machine, not protocol failures.
-
-## Current slices
-
-The kernel slice introduces the boundary without changing public behavior:
-
-- `transfer`, `completeMint`, and `resolveBurn` delegate to `createSettlementKernel(defaultSettlementDependencies)`.
-- The default adapters call the same Arc, Stellar, and Iris functions as before, with the same arguments.
-- The state machine runs inside the kernel and is covered by tests.
-- The shipped conformance harness exercises the `ChainAdapter` contract with fake adapters.
-- The existing transfer, mint, and attestation tests continue to pass unchanged.
-
-The execution slice adds idempotent persistence and burn recovery around the kernel:
-
-- `executeTransfer` is covered for success, pending replay, minted replay, key mismatch, conflicts, progress persistence, recoverable and failed errors, persistence failures, concurrent calls, lease release, lease contention, and lost leases.
-- `executeTransfer` resumes `burned`, `attesting`, `attested`, and `recoverable` records through `completeMint` when a destination signer is available.
-- The kernel is covered for success, pending, complete-mint, and progress-failure event sequences.
-- `MemoryTransferStore` is covered for record create, update, replay, claim, renew, release, expiry, and deletion.
-- `FileTransferStore` is covered for atomic create, replacement, deletion, unsafe keys, persistence across store instances, lease claims, renewal, release, expiry, and concurrent claims.
-- The remote store server and clients are covered for record CRUD, shared lease claims, unsafe keys, cursor serialization, authentication, request validation, metrics, and route handling.
-- `reconcileTransfer` is covered for burn promotion, mint promotion, conflicting evidence, missing evidence, terminal records, lease contention, and persistence failures.
-- `indexArcBurns` is covered for matching burns, unmatched records, ambiguous matches, missing source addresses, busy leases, testnet selection, and invalid block ranges.
-- `indexStellarBurns` is covered for event decoding, matching burns, unmatched records, ambiguous matches, missing source addresses, busy leases, testnet selection, pagination, ledger-range stopping, failed contract calls, and invalid ledger ranges.
-- `indexArcMints` is covered for matching mints, unmatched records, ambiguous matches, malformed bodies, hook rejection, source-domain and sender filtering, busy leases, testnet selection, and invalid block ranges.
-- `indexStellarMints` is covered for matching mints, unmatched records, ambiguous matches, recipient and token filtering, busy leases, testnet selection, pagination, failed contract calls, and invalid ledger ranges.
-- `decodeCctpBurnBody` is covered against a live testnet burn body and for short-body rejection.
-- `MemoryIndexerCursorStore` and `FileIndexerCursorStore` are covered for round-tripping, overwrites, deletion, missing streams, encoded file names, decimal block-number persistence, cross-instance persistence, and invalid cursors.
-- `syncArcBurns` and `syncArcMints` are covered for first scans, canonical resume, cursor-at-tip, reorg rewinds, deep rewinds, cursor-ahead rewinds, missing cursor blocks, missing tip blocks, safe-tip-before-start, custom streams, invalid settings, and end-to-end burn and mint reconciliation.
-- `syncStellarBurns` and `syncStellarMints` are covered for first scans, canonical resume, cursor-at-tip, missing cursor ledgers, hash mismatches, cursor-ahead errors, missing tip ledgers, latest-before-start, custom streams, invalid start ledgers, and end-to-end burn and mint reconciliation.
-- `createSettlementRuntime` is covered for durable execution, evidence reconciliation, read-only burn resolution, empty-store indexing, and default-kernel construction.
-- The execution and indexer subpaths are covered for their expected value exports.
-- The stores are covered for record listing in deterministic order.
-- `createIndexerWorker` is covered for multi-stream cycles, per-stream switches, isolated failures, interval validation, stop behavior, aborted startup, and task and cycle metrics.
-- `createApiServer` is covered for health, bearer authentication, transfer listing and reads, evidence reconciliation, Arc and Stellar range indexing, Arc and Stellar cursor sync, request metrics, malformed JSON, content type, body limits, invalid networks, invalid block numbers, unknown routes, and wrong methods.
-- The CLI is covered for parsing, unknown flags, required arguments, one-shot commands, sync cycles, JSON output, and watch shutdown wiring.
-- `MemoryMetrics`, `MemoryLogger`, and `JsonLogger` are covered for recording, label isolation, reset behavior, bigint serialization, and structured records.
-- The conformance harness is covered for static adapter checks, live probe ordering, empty hashes, skipped recipient checks, complete dependency checks, missing methods, and wrong chain slots.
-- `ChainAdapterRegistry` is covered for registration, resolution, duplicate rejection, conformance rejection, and incomplete records.
-- `WebhookDispatcher` is covered for endpoint filtering, idempotent enqueue, signed payloads, successful delivery, retries, `Retry-After`, client errors, network failures, missing and disabled endpoints, endpoint store changes, dead-letter replay, in-flight deduplication, metrics, and logs.
-- `WebhookReplayGuard`, `WebhookEndpointManager`, the endpoint stores, the delivery stores, and `transferWebhookEvent` are covered for replay windows, expiry, eviction, endpoint validation, persistence, due and failed ordering, unsafe ids, and phase mapping.
-- The API, observability, conformance, provider, and webhook subpaths are covered for their expected value exports.
+`KernelError` and `InvalidStateTransitionError` are internal. They describe programming errors in the state machine, not protocol failures.
 
 ## Non-goals
 
-Parabola does not provide a distributed database or a multi-writer file store, a hosted webhook management UI, automatic dead-letter scheduling, per-route authorization, rate limiting, TLS termination, gas abstraction, or chains beyond Arc and Stellar. The store server centralizes lease authority for remote clients but remains a single coordination point. The HTTP API and store server are operator surfaces that belong behind an ingress and identity layer. The metrics and logging contracts are integration points, not a hosted observability backend.
-
-## Next slices
-
-1. Gas abstraction and additional CCTP domains.
-2. Compatibility policy and release automation.
+Parabola does not provide a distributed database or a multi-writer file store, a hosted webhook management UI, automatic dead-letter scheduling, per-route authorization, rate limiting, or TLS termination. It supports Arc and Stellar. The store server centralizes lease authority for remote clients but remains a single coordination point. The HTTP API and store server are operator surfaces that belong behind an ingress and identity layer. The metrics and logging contracts are integration points, not a hosted observability backend.
 
 ## Verification
 
+- `pnpm lint`
+- `pnpm format:check`
 - `pnpm typecheck`
-- `pnpm test`
+- `pnpm test:coverage`
 - `pnpm build`
 - `npm pack --dry-run`
 

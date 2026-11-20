@@ -24,7 +24,7 @@ Introduce a chain-agnostic kernel and a provider boundary.
 - Default adapters in `src/providers/default.ts` wrap the existing Arc, Stellar, and Iris functions.
 - `src/transfer.ts` delegates to a kernel built from those default adapters.
 
-The public API and its behavior stay unchanged in this slice.
+The public API and its behavior stay unchanged.
 
 ## Consequences
 

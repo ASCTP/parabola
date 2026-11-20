@@ -41,7 +41,7 @@ Negative:
 ## Alternatives considered
 
 - Keep endpoint management outside the package. Rejected because every integrator would repeat the same validation and storage work.
-- Add automatic dead-letter retries. Rejected for this slice because it needs an operator policy for timing, limits, and alerting.
+- Add automatic dead-letter retries. Rejected because it needs an operator policy for timing, limits, and alerting.
 - Let `redeliver()` resume from the previous attempt count. Rejected because a terminal failure may have exhausted the budget and the operator has already decided the receiver is healthy again.
 - Replace the static endpoint option entirely. Rejected because it keeps tests and single-process use simple.
 
