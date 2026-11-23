@@ -11,7 +11,7 @@
 import { createServer } from "node:http";
 import { createPublicClient, createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { Keypair, rpc } from "@stellar/stellar-sdk";
+import { Keypair } from "@stellar/stellar-sdk";
 import { arcTestnetChain } from "../dist/index.js";
 import { createApiServer, createStoreServer } from "../dist/api.js";
 import { createSettlementRuntime } from "../dist/runtime.js";
@@ -73,10 +73,14 @@ const arcClient = createPublicClient({
   chain: arcTestnetChain,
   transport: http(),
 });
-const stellarServer = new rpc.Server(STELLAR_RPC_URL);
 
 const arcStartBlock = await arcClient.getBlockNumber();
-const stellarStartLedger = (await stellarServer.getLatestLedger()).sequence;
+const latestLedgerResponse = await fetch(STELLAR_RPC_URL, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getLatestLedger" }),
+});
+const stellarStartLedger = (await latestLedgerResponse.json()).result.sequence;
 console.log(
   `Start positions: Arc block ${arcStartBlock}, Stellar ledger ${stellarStartLedger}`,
 );
@@ -199,22 +203,30 @@ try {
     "arc burn sync resumes from the saved cursor",
     arcSecond.fromBlock >= arcSync.toBlock,
   );
-  const stellarSync = await runtimeA.syncStellarMints({
-    network: "testnet",
-    startLedger: stellarStartLedger,
-    rpcUrl: STELLAR_RPC_URL,
-    cursorStore,
-    stream: "ops-smoke-stellar-mints",
-  });
-  check(
-    "stellar mint sync verifies ledgers and saves a cursor",
-    stellarSync.cursor !== undefined,
-  );
-  const savedCursor = await cursorStore.get("ops-smoke-stellar-mints");
-  check(
-    "cursor is stored on the store server",
-    savedCursor !== undefined && savedCursor !== null,
-  );
+  try {
+    const stellarSync = await runtimeA.syncStellarMints({
+      network: "testnet",
+      startLedger: stellarStartLedger,
+      rpcUrl: STELLAR_RPC_URL,
+      cursorStore,
+      stream: "ops-smoke-stellar-mints",
+    });
+    check(
+      "stellar mint sync verifies ledgers and saves a cursor",
+      stellarSync.cursor !== undefined,
+    );
+    const savedCursor = await cursorStore.get("ops-smoke-stellar-mints");
+    check(
+      "cursor is stored on the store server",
+      savedCursor !== undefined && savedCursor !== null,
+    );
+  } catch (error) {
+    check(
+      "stellar mint sync completes",
+      false,
+      error instanceof Error ? error.message : String(error),
+    );
+  }
 
   console.log("\n--- signed webhook delivery ---");
   const dispatcher = new WebhookDispatcher({
@@ -237,7 +249,7 @@ try {
   );
   check(
     "payload carries the burn hash",
-    delivery?.body.includes(outcome.result.burnTxHash),
+    delivery?.body.includes(outcome.result.burnTxHash) === true,
   );
 } catch (error) {
   failures += 1;
