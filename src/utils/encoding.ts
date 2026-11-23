@@ -10,7 +10,7 @@ import { toHex, pad } from "viem";
  * left-padded to 32 bytes, matching StrKey.decodeContract / decodeEd25519PublicKey.
  */
 export function stellarAddressToBytes32(address: string): `0x${string}` {
-  let raw: Buffer;
+  let raw: Uint8Array;
   if (StrKey.isValidEd25519PublicKey(address)) {
     raw = StrKey.decodeEd25519PublicKey(address);
   } else if (StrKey.isValidContract(address)) {
