@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Stellar RPC ledger reads failed with `unknown StellarValueType member for value 3` on testnet and mainnet, which run protocol 30, because `@stellar/stellar-sdk` 16.2.0 could not parse the ledger header. This broke the approval step of a Stellar to Arc burn and the Stellar indexer. The SDK range is now `^17.4.0`.
+
 ### Added
 
 - Durable execution subpaths. `@asctp/parabola/execution` exposes the idempotent executor, evidence reconciler, lease-aware store contracts, and memory and file stores. `@asctp/parabola/runtime` composes the default kernel with durable execution, reconciliation, chain-event indexing, and cursor sync.
