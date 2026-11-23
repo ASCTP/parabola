@@ -86,6 +86,7 @@
     "format:check": "biome format",
     "verify:addresses": "node scripts/verify-contract-addresses.mjs",
     "smoke": "node scripts/testnet-smoke.mjs",
+    "smoke:ops": "node scripts/testnet-ops-smoke.mjs",
     "dev:wallet-transfer-demo": "pnpm --filter wallet-transfer-demo dev"
   },
   "keywords": [
