@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Development tooling is updated to patched versions. Vitest and its coverage plugin move to 4.1.12, vite in the demo app and website moves to 6.4.6, tsup builds with esbuild 0.28.2 through a scoped override, and the lockfile resolves patched releases of follow-redirects, smol-toml, postcss, and source-map-js. This clears every open Dependabot alert and does not change the published package.
+
 ## [0.5.0] - 2026-11-24
 
 ### Changed

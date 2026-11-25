@@ -272,6 +272,47 @@ describe("parabola CLI", () => {
     await expect(running).resolves.toBe(0);
   });
 
+  it("runs the HTTP API with token authentication until a signal arrives", async () => {
+    const { io, stdout } = capture();
+    const running = main(
+      [
+        "serve",
+        "--store-dir",
+        directory,
+        "--cursor-dir",
+        cursorDirectory,
+        "--port",
+        "0",
+        "--token",
+        "cli-token",
+      ],
+      io,
+    );
+
+    for (let attempt = 0; attempt < 100 && stdout.length === 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    const match = /Listening on (\S+)/.exec(stdout.join(""));
+    expect(match).not.toBeNull();
+    const health = await fetch(`${match?.[1]}/health`);
+    expect(health.status).toBe(200);
+    const denied = await fetch(`${match?.[1]}/transfers/order-1`);
+    expect(denied.status).toBe(401);
+    const missing = await fetch(`${match?.[1]}/transfers/order-1`, {
+      headers: { authorization: "Bearer cli-token" },
+    });
+    expect(missing.status).toBe(404);
+
+    process.emit("SIGINT");
+    await expect(running).resolves.toBe(0);
+  });
+
+  it("rejects unknown serve options", async () => {
+    const { io, stderr } = capture();
+    await expect(main(["serve", "--bogus", "1"], io)).resolves.toBe(1);
+    expect(stderr.join("")).toContain("Unknown option: --bogus");
+  });
+
   it("rejects unknown store options", async () => {
     const { io, stderr } = capture();
     await expect(main(["store", "--bogus", "1"], io)).resolves.toBe(1);
