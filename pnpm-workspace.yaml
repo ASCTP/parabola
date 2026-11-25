@@ -4,3 +4,6 @@ packages:
   - "."
   - "demos/*"
   - "website"
+
+overrides:
+  "tsup>esbuild": "^0.28.2"
